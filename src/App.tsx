@@ -26,7 +26,9 @@ import {
   X,
   MousePointerClick,
   CreditCard,
+  RefreshCw,
 } from "lucide-react";
+
 import {
   companies,
   performanceMetrics,
@@ -68,6 +70,12 @@ export default function App() {
   const [googleAdsData, setGoogleAdsData] = useState<any[]>([]);
   const [isFetchingGoogleAds, setIsFetchingGoogleAds] = useState(false);
   const [googleAdsError, setGoogleAdsError] = useState<string | null>(null);
+
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+  const handleRefresh = () => {
+    setRefreshTrigger(prev => prev + 1);
+  };
 
   const SHEET_ID = "1kGjFoEJ36-g1empy9HmYzQmF0Rd-y_06sy54YvOYlps";
   const TRAFFIC_SHEET_ID = "1om3vD7mik6psxaLjt6QGqnkEnGdpr6T5dBrNIjYa4BY";
@@ -167,7 +175,7 @@ export default function App() {
       }
     });
 
-  }, [selectedCompany]);
+  }, [selectedCompany, refreshTrigger]);
 
   const handleSaveStrategy = () => {
     // In a real app, this would save to a backend
@@ -374,6 +382,16 @@ export default function App() {
     calculatedRoi = `${roi.toFixed(2)}x`;
   }
 
+  let metaRoi = "0.00x";
+  if (computedTrafficMetrics.investimentoMeta > 0) {
+    metaRoi = `${(computedTrafficMetrics.faturamentoMeta / computedTrafficMetrics.investimentoMeta).toFixed(2)}x`;
+  }
+
+  let googleRoi = "0.00x";
+  if (computedTrafficMetrics.investimentoGoogle > 0) {
+    googleRoi = `${(computedTrafficMetrics.faturamentoGoogle / computedTrafficMetrics.investimentoGoogle).toFixed(2)}x`;
+  }
+
   return (
     <div className="min-h-screen bg-neutral-50 font-sans text-neutral-900">
       {/* Header */}
@@ -457,6 +475,13 @@ export default function App() {
                   Resumo de Performance
                 </h2>
                 <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleRefresh}
+                    className="p-2 bg-neutral-100 hover:bg-neutral-200 rounded-lg text-neutral-600 transition-colors"
+                    title="Atualizar dados base"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${isFetchingSheet || isFetchingTraffic || isFetchingGoogleAds ? 'animate-spin' : ''}`} />
+                  </button>
                   {dateRange === "Personalizado" && (
                     <div className="flex items-center gap-2 bg-neutral-50 border border-neutral-200 rounded-lg p-1">
                       <input
@@ -561,16 +586,35 @@ export default function App() {
                   value={calculatedRoi}
                   change={mockMetrics.roiChange}
                   icon={<BarChart3 className="w-5 h-5 text-purple-600" />}
+                  subtitle={
+                    <div className="flex flex-col gap-1 mt-1 text-[10px] sm:text-xs">
+                      <div className="flex items-center gap-1">
+                        <span className="text-blue-600 font-medium bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100">
+                          Meta: {metaRoi}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="text-emerald-600 font-medium bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">
+                          Google: {googleRoi}
+                        </span>
+                      </div>
+                    </div>
+                  }
                 />
               </div>
 
               {/* Insights Panel */}
               <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm overflow-hidden">
-                <div className="px-6 py-4 border-b border-neutral-100 bg-neutral-50/50 flex items-center gap-2">
-                  <Sparkles className="w-5 h-5 text-amber-500" />
-                  <h2 className="font-semibold text-neutral-800">
-                    Insights Gerados por IA
-                  </h2>
+                <div className="px-6 py-4 border-b border-neutral-100 bg-neutral-50/50 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-5 h-5 text-amber-500" />
+                    <h2 className="font-semibold text-neutral-800">
+                      Insights Gerados por IA
+                    </h2>
+                  </div>
+                  <span className="text-xs font-semibold px-2 py-1 bg-amber-100 text-amber-700 rounded-md">
+                    Em construção
+                  </span>
                 </div>
                 <div className="p-6">
                   <ul className="space-y-4">
