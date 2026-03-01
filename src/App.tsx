@@ -48,6 +48,7 @@ export default function App() {
     const d = new Date();
     return d.toISOString().split('T')[0];
   });
+  const [funnelSource, setFunnelSource] = useState<"all" | "meta" | "google">("all");
 
   // Strategy Edit State
   const [isEditingStrategy, setIsEditingStrategy] = useState(false);
@@ -331,8 +332,24 @@ export default function App() {
     };
   }, [trafficData, googleAdsData, dateRange, customStartDate, customEndDate]);
 
-  const funnelData = useMemo(() => {
-    const data: Record<string, number> = {
+  const funnelDataSources = useMemo(() => {
+    const meta: Record<string, number> = {
+      'Cliques no Link': 0,
+      'Visualizações de Página': 0,
+      'Adições no Carrinho': 0,
+      'Checkout': 0,
+      'Compras Meta': 0
+    };
+
+    const google: Record<string, number> = {
+      'Cliques no Link': 0,
+      'Visualizações de Página': 0,
+      'Adições no Carrinho': 0,
+      'Checkout': 0,
+      'Compras Meta': 0
+    };
+
+    const all: Record<string, number> = {
       'Cliques no Link': 0,
       'Visualizações de Página': 0,
       'Adições no Carrinho': 0,
@@ -348,7 +365,10 @@ export default function App() {
         ['Cliques no Link', 'Visualizações de Página', 'Adições no Carrinho', 'Checkout', 'Compras Meta'].forEach(key => {
           const valStr = row[key] || "0";
           const val = parseInt(valStr.replace(/\./g, ''), 10);
-          if (!isNaN(val)) data[key] += val;
+          if (!isNaN(val)) {
+            meta[key] += val;
+            all[key] += val;
+          }
         });
       }
     });
@@ -363,14 +383,20 @@ export default function App() {
         const conversions = row['Compras Meta'] || row['Conversões'] || "0";
 
         const valClicks = parseFloat(clicks.replace(/\./g, '').replace(',', '.'));
-        if (!isNaN(valClicks)) data['Cliques no Link'] += valClicks;
+        if (!isNaN(valClicks)) {
+          google['Cliques no Link'] += valClicks;
+          all['Cliques no Link'] += valClicks;
+        }
 
         const valConversions = parseFloat(conversions.replace(/\./g, '').replace(',', '.'));
-        if (!isNaN(valConversions)) data['Compras Meta'] += valConversions;
+        if (!isNaN(valConversions)) {
+          google['Compras Meta'] += valConversions;
+          all['Compras Meta'] += valConversions;
+        }
       }
     });
 
-    return data;
+    return { meta, google, all };
   }, [trafficData, googleAdsData, dateRange, customStartDate, customEndDate]);
 
   // Calculate ROI based on real revenue and real investment
@@ -682,6 +708,23 @@ export default function App() {
                 </div>
               </div>
 
+              <div className="flex justify-center sm:justify-start">
+                <div className="flex bg-neutral-100 p-1 rounded-lg">
+                  {(['all', 'meta', 'google'] as const).map(source => (
+                    <button
+                      key={source}
+                      onClick={() => setFunnelSource(source)}
+                      className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${funnelSource === source
+                          ? 'bg-white text-indigo-700 shadow-sm'
+                          : 'text-neutral-500 hover:text-neutral-700'
+                        }`}
+                    >
+                      {source === 'all' ? 'Visão Geral (Todos)' : source === 'meta' ? 'Meta Ads' : 'Google Ads'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {isFetchingTraffic || isFetchingGoogleAds ? (
                 <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm p-16 flex flex-col items-center justify-center text-neutral-500">
                   <div className="w-8 h-8 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mb-4"></div>
@@ -745,9 +788,10 @@ export default function App() {
                           key: 'Compras Meta'
                         }
                       ].map((stage, index, array) => {
-                        const value = funnelData[stage.key] || 0;
+                        const currentFunnelData = funnelDataSources[funnelSource];
+                        const value = currentFunnelData[stage.key] || 0;
                         const nextStage = array[index + 1];
-                        const nextValue = nextStage ? (funnelData[nextStage.key] || 0) : null;
+                        const nextValue = nextStage ? (currentFunnelData[nextStage.key] || 0) : null;
                         const conversionRate = nextValue !== null && value > 0 ? ((nextValue / value) * 100).toFixed(1) : "0.0";
 
                         const colorMap: Record<string, any> = {
@@ -760,7 +804,14 @@ export default function App() {
 
                         const colors = colorMap[stage.color];
                         const widthClass = index === 0 ? 'w-full' : index === 1 ? 'w-[95%]' : index === 2 ? 'w-[90%]' : index === 3 ? 'w-[85%]' : 'w-[80%]';
-                        const costPerConversion = value > 0 ? computedTrafficMetrics.investimentoMeta / value : 0;
+
+                        const getInvestmentForSource = () => {
+                          if (funnelSource === 'meta') return computedTrafficMetrics.investimentoMeta;
+                          if (funnelSource === 'google') return computedTrafficMetrics.investimentoGoogle;
+                          return computedTrafficMetrics.investimentoTotal;
+                        };
+
+                        const costPerConversion = value > 0 ? getInvestmentForSource() / value : 0;
 
                         return (
                           <div key={stage.id} className="relative">
