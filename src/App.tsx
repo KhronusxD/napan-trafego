@@ -476,10 +476,20 @@ export default function App() {
     if (dateRange === "Hoje") {
       return normalizedRowDate.getTime() === today.getTime();
     }
+    if (dateRange === "Ontem") {
+      const yesterday = new Date(today);
+      yesterday.setDate(today.getDate() - 1);
+      return normalizedRowDate.getTime() === yesterday.getTime();
+    }
     if (dateRange === "Últimos 7 dias") {
       const sevenDaysAgo = new Date(today);
       sevenDaysAgo.setDate(today.getDate() - 7);
       return normalizedRowDate >= sevenDaysAgo && normalizedRowDate <= today;
+    }
+    if (dateRange === "Últimos 15 dias") {
+      const fifteenDaysAgo = new Date(today);
+      fifteenDaysAgo.setDate(today.getDate() - 15);
+      return normalizedRowDate >= fifteenDaysAgo && normalizedRowDate <= today;
     }
     if (dateRange === "Últimos 30 dias") {
       const thirtyDaysAgo = new Date(today);
@@ -505,17 +515,95 @@ export default function App() {
     return true;
   };
 
+  // Check if a date is within the *previous* equivalent range
+  const isDateInPreviousRange = (rowDate: Date | null) => {
+    if (!rowDate) return true;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const normalizedRowDate = new Date(rowDate);
+    normalizedRowDate.setHours(0, 0, 0, 0);
+
+    if (dateRange === "Hoje") {
+      const yesterday = new Date(today);
+      yesterday.setDate(today.getDate() - 1);
+      return normalizedRowDate.getTime() === yesterday.getTime();
+    }
+    if (dateRange === "Ontem") {
+      const d2 = new Date(today);
+      d2.setDate(today.getDate() - 2);
+      return normalizedRowDate.getTime() === d2.getTime();
+    }
+    if (dateRange === "Últimos 7 dias") {
+      const d14 = new Date(today);
+      d14.setDate(today.getDate() - 14);
+      const d8 = new Date(today);
+      d8.setDate(today.getDate() - 8);
+      return normalizedRowDate >= d14 && normalizedRowDate <= d8;
+    }
+    if (dateRange === "Últimos 15 dias") {
+      const d30 = new Date(today);
+      d30.setDate(today.getDate() - 30);
+      const d16 = new Date(today);
+      d16.setDate(today.getDate() - 16);
+      return normalizedRowDate >= d30 && normalizedRowDate <= d16;
+    }
+    if (dateRange === "Últimos 30 dias") {
+      const d60 = new Date(today);
+      d60.setDate(today.getDate() - 60);
+      const d31 = new Date(today);
+      d31.setDate(today.getDate() - 31);
+      return normalizedRowDate >= d60 && normalizedRowDate <= d31;
+    }
+    if (dateRange === "Este mês") {
+      const lastMonth = new Date(today);
+      lastMonth.setMonth(today.getMonth() - 1);
+      return normalizedRowDate.getMonth() === lastMonth.getMonth() && normalizedRowDate.getFullYear() === lastMonth.getFullYear();
+    }
+    if (dateRange === "Mês passado") {
+      const twoMonthsAgo = new Date(today);
+      twoMonthsAgo.setMonth(today.getMonth() - 2);
+      return normalizedRowDate.getMonth() === twoMonthsAgo.getMonth() && normalizedRowDate.getFullYear() === twoMonthsAgo.getFullYear();
+    }
+    if (dateRange === "Personalizado") {
+      if (!customStartDate || !customEndDate) return true;
+      const start = new Date(customStartDate + 'T00:00:00');
+      const end = new Date(customEndDate + 'T00:00:00');
+      start.setHours(0, 0, 0, 0);
+      end.setHours(0, 0, 0, 0);
+
+      const diffTime = Math.abs(end.getTime() - start.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // inclusive
+
+      const prevEnd = new Date(start);
+      prevEnd.setDate(start.getDate() - 1);
+
+      const prevStart = new Date(prevEnd);
+      prevStart.setDate(prevEnd.getDate() - diffDays + 1);
+
+      return normalizedRowDate >= prevStart && normalizedRowDate <= prevEnd;
+    }
+    return true;
+  };
+
   // Filter sheet data based on selected date range
   const getFilteredData = () => {
     return sheetData.filter(row => isDateInRange(parseDate(row["Data"])));
   };
-
   const filteredData = getFilteredData();
+
+  const getPreviousFilteredData = () => {
+    return sheetData.filter(row => isDateInPreviousRange(parseDate(row["Data"])));
+  };
+  const previousFilteredData = getPreviousFilteredData();
 
   // Compute metrics from filtered sheet data
   const computedMetrics = {
     revenue: 0,
     purchases: 0,
+    prevRevenue: 0,
+    prevPurchases: 0,
   };
 
   filteredData.forEach(row => {
@@ -528,33 +616,54 @@ export default function App() {
     if (!isNaN(purchasesNum)) computedMetrics.purchases += purchasesNum;
   });
 
+  previousFilteredData.forEach(row => {
+    const revenueStr = row["Pedidos Pagos"] || "0";
+    const revenueNum = parseFloat(revenueStr.replace(/\./g, '').replace(',', '.'));
+    if (!isNaN(revenueNum)) computedMetrics.prevRevenue += revenueNum;
+
+    const purchasesStr = row["Quantidade Pedidos"] || "0";
+    const purchasesNum = parseInt(purchasesStr, 10);
+    if (!isNaN(purchasesNum)) computedMetrics.prevPurchases += purchasesNum;
+  });
+
   const formattedRevenue = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(computedMetrics.revenue);
 
   // Compute traffic metrics
   const computedTrafficMetrics = useMemo(() => {
     let investimentoMeta = 0;
     let investimentoGoogle = 0;
+    let prevInvestimentoMeta = 0;
+    let prevInvestimentoGoogle = 0;
+
     let metaPurchases = 0;
     let googlePurchases = 0;
+    let prevMetaPurchases = 0;
+    let prevGooglePurchases = 0;
+
     let faturamentoMeta = 0;
     let faturamentoGoogle = 0;
+    let prevFaturamentoMeta = 0;
+    let prevFaturamentoGoogle = 0;
 
     trafficData.forEach(row => {
       const rowDate = parseDate(row["Data"]);
       if (!rowDate) return;
 
+      const gStr = row["Investimento"] || row["Gastos"] || "0";
+      const g = parseFloat(gStr.replace(/\./g, '').replace(',', '.'));
+      const pStr = row["Compras Meta"] || "0";
+      const p = parseFloat(pStr.replace(/\./g, '').replace(',', '.'));
+      const fStr = row["Faturamento Meta Ads"] || "0";
+      const f = parseFloat(fStr.replace(/\./g, '').replace(',', '.'));
+
       if (isDateInRange(rowDate)) {
-        const gStr = row["Investimento"] || row["Gastos"] || "0";
-        const g = parseFloat(gStr.replace(/\./g, '').replace(',', '.'));
         if (!isNaN(g)) investimentoMeta += g;
-
-        const pStr = row["Compras Meta"] || "0";
-        const p = parseFloat(pStr.replace(/\./g, '').replace(',', '.'));
         if (!isNaN(p)) metaPurchases += p;
-
-        const fStr = row["Faturamento Meta Ads"] || "0";
-        const f = parseFloat(fStr.replace(/\./g, '').replace(',', '.'));
         if (!isNaN(f)) faturamentoMeta += f;
+      } else if (isDateInPreviousRange(rowDate)) {
+        if (!isNaN(g)) prevInvestimentoMeta += g;
+        if (!isNaN(p)) prevMetaPurchases += p;
+        if (!isNaN(f)) prevFaturamentoMeta += f;
       }
     });
 
@@ -562,31 +671,42 @@ export default function App() {
       const rowDate = parseDate(row["Data"]);
       if (!rowDate) return;
 
+      const gStr = row["Investimento"] || row["Gastos"] || "0";
+      const g = parseFloat(gStr.replace(/\./g, '').replace(',', '.'));
+      const pStr = row["Compras Meta"] || row["Conversões"] || "0";
+      const p = parseFloat(pStr.replace(/\./g, '').replace(',', '.'));
+      const fStr = row["Faturamento Google Ads"] || row["Valor da conversão"] || "0";
+      const f = parseFloat(fStr.replace(/\./g, '').replace(',', '.'));
+
       if (isDateInRange(rowDate)) {
-        const gStr = row["Investimento"] || row["Gastos"] || "0";
-        const g = parseFloat(gStr.replace(/\./g, '').replace(',', '.'));
         if (!isNaN(g)) investimentoGoogle += g;
-
-        const pStr = row["Compras Meta"] || row["Conversões"] || "0";
-        const p = parseFloat(pStr.replace(/\./g, '').replace(',', '.'));
         if (!isNaN(p)) googlePurchases += p;
-
-        const fStr = row["Faturamento Google Ads"] || row["Valor da conversão"] || "0";
-        const f = parseFloat(fStr.replace(/\./g, '').replace(',', '.'));
         if (!isNaN(f)) faturamentoGoogle += f;
+      } else if (isDateInPreviousRange(rowDate)) {
+        if (!isNaN(g)) prevInvestimentoGoogle += g;
+        if (!isNaN(p)) prevGooglePurchases += p;
+        if (!isNaN(f)) prevFaturamentoGoogle += f;
       }
     });
 
     const investimentoTotal = investimentoMeta + investimentoGoogle;
+    const prevInvestimentoTotal = prevInvestimentoMeta + prevInvestimentoGoogle;
 
     return {
       investimentoMeta,
       investimentoGoogle,
       investimentoTotal,
+      prevInvestimentoMeta,
+      prevInvestimentoGoogle,
+      prevInvestimentoTotal,
       metaPurchases,
       googlePurchases,
+      prevMetaPurchases,
+      prevGooglePurchases,
       faturamentoMeta,
-      faturamentoGoogle
+      faturamentoGoogle,
+      prevFaturamentoMeta,
+      prevFaturamentoGoogle,
     };
   }, [trafficData, googleAdsData, dateRange, customStartDate, customEndDate]);
 
@@ -660,10 +780,18 @@ export default function App() {
   // Calculate ROI based on real revenue and real investment
   const investmentNum = computedTrafficMetrics.investimentoTotal;
   let calculatedRoi = "0.00x";
+  let currentCalculatedRoiNum = 0;
 
   if (!isNaN(investmentNum) && investmentNum > 0 && computedMetrics.revenue > 0) {
-    const roi = computedMetrics.revenue / investmentNum;
-    calculatedRoi = `${roi.toFixed(2)}x`;
+    currentCalculatedRoiNum = computedMetrics.revenue / investmentNum;
+    calculatedRoi = `${currentCalculatedRoiNum.toFixed(2)}x`;
+  }
+
+  const prevInvestmentNum = computedTrafficMetrics.prevInvestimentoTotal;
+  let prevCalculatedRoiNum = 0;
+
+  if (!isNaN(prevInvestmentNum) && prevInvestmentNum > 0 && computedMetrics.prevRevenue > 0) {
+    prevCalculatedRoiNum = computedMetrics.prevRevenue / prevInvestmentNum;
   }
 
   let metaRoi = "0.00x";
@@ -873,7 +1001,9 @@ export default function App() {
                       className="appearance-none bg-neutral-50 border border-neutral-200 text-neutral-700 py-2 pl-10 pr-10 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent cursor-pointer"
                     >
                       <option>Hoje</option>
+                      <option>Ontem</option>
                       <option>Últimos 7 dias</option>
+                      <option>Últimos 15 dias</option>
                       <option>Últimos 30 dias</option>
                       <option>Este mês</option>
                       <option>Mês passado</option>
@@ -890,7 +1020,9 @@ export default function App() {
                 <MetricCard
                   title="Faturamento"
                   value={formattedRevenue}
-                  change={mockMetrics.revenueChange}
+                  currentAmount={computedMetrics.revenue}
+                  previousAmount={computedMetrics.prevRevenue}
+                  isCurrency={true}
                   icon={<DollarSign className="w-5 h-5 text-emerald-600" />}
                   subtitle={
                     <div className="flex flex-col gap-1 mt-1 text-[10px] sm:text-xs">
@@ -910,7 +1042,9 @@ export default function App() {
                 <MetricCard
                   title="Investimento"
                   value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(computedTrafficMetrics.investimentoTotal)}
-                  change={mockMetrics.investmentChange}
+                  currentAmount={computedTrafficMetrics.investimentoTotal}
+                  previousAmount={computedTrafficMetrics.prevInvestimentoTotal}
+                  isCurrency={true}
                   icon={<TrendingUp className="w-5 h-5 text-indigo-600" />}
                   inverseChange
                   subtitle={
@@ -931,7 +1065,9 @@ export default function App() {
                 <MetricCard
                   title="Compras"
                   value={computedMetrics.purchases.toString()}
-                  change={mockMetrics.purchasesChange}
+                  currentAmount={computedMetrics.purchases}
+                  previousAmount={computedMetrics.prevPurchases}
+                  isCurrency={false}
                   icon={<ShoppingCart className="w-5 h-5 text-blue-600" />}
                   subtitle={
                     <div className="flex flex-col gap-1 mt-1 text-[10px] sm:text-xs">
@@ -951,7 +1087,9 @@ export default function App() {
                 <MetricCard
                   title="ROI"
                   value={calculatedRoi}
-                  change={mockMetrics.roiChange}
+                  currentAmount={currentCalculatedRoiNum}
+                  previousAmount={prevCalculatedRoiNum}
+                  isCurrency={false}
                   icon={<BarChart3 className="w-5 h-5 text-purple-600" />}
                   subtitle={
                     <div className="flex flex-col gap-1 mt-1 text-[10px] sm:text-xs">
@@ -1037,7 +1175,9 @@ export default function App() {
                       className="appearance-none bg-neutral-50 border border-neutral-200 text-neutral-700 py-2 pl-10 pr-10 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent cursor-pointer"
                     >
                       <option>Hoje</option>
+                      <option>Ontem</option>
                       <option>Últimos 7 dias</option>
+                      <option>Últimos 15 dias</option>
                       <option>Últimos 30 dias</option>
                       <option>Este mês</option>
                       <option>Mês passado</option>
@@ -2004,20 +2144,39 @@ function EditableMetricCard({ metric, metricKey, moduleName, getMetricHealthColo
 function MetricCard({
   title,
   value,
-  change,
+  currentAmount,
+  previousAmount,
+  isCurrency = false,
   icon,
   inverseChange = false,
   subtitle,
 }: {
   title: string;
   value: string;
-  change: string;
+  currentAmount: number;
+  previousAmount: number;
+  isCurrency?: boolean;
   icon: React.ReactNode;
   inverseChange?: boolean;
   subtitle?: React.ReactNode;
 }) {
-  const isPositive = change.startsWith("+");
+  let percentChange = 0;
+  if (previousAmount > 0) {
+    percentChange = ((currentAmount - previousAmount) / previousAmount) * 100;
+  } else if (currentAmount > 0) {
+    percentChange = 100;
+  }
+
+  const isPositive = percentChange >= 0;
   const isGood = inverseChange ? !isPositive : isPositive;
+  const formattedPercent = Math.abs(percentChange).toFixed(1) + "%";
+
+  const formatAmount = (amt: number) => {
+    if (isCurrency) return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(amt);
+    return amt % 1 !== 0 ? amt.toFixed(2) : amt.toString();
+  };
+
+  const tooltipText = `Anterior: ${formatAmount(previousAmount)} | Atual: ${formatAmount(currentAmount)}`;
 
   return (
     <div className="bg-white rounded-2xl border border-neutral-200 p-6 shadow-sm flex flex-col">
@@ -2030,11 +2189,12 @@ function MetricCard({
           {value}
         </div>
         <div
-          className={`text-sm font-medium flex items-center gap-1 ${isGood ? "text-emerald-600" : "text-red-600"}`}
+          title={tooltipText}
+          className={`text-sm font-medium flex items-center gap-1 w-max cursor-help border-b border-transparent hover:border-current transition-colors ${isGood ? "text-emerald-600" : "text-red-600"}`}
         >
-          {isPositive ? "↑" : "↓"} {change.replace(/[+-]/, "")}
+          {isPositive ? "↑" : "↓"} {formattedPercent}
           <span className="text-neutral-400 font-normal ml-1">
-            vs último mês
+            vs período anterior
           </span>
         </div>
         {subtitle && <div className="mt-3">{subtitle}</div>}
