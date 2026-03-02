@@ -27,6 +27,11 @@ import {
   MousePointerClick,
   CreditCard,
   RefreshCw,
+  Activity,
+  CheckCircle2,
+  AlertCircle,
+  Info,
+  Settings,
 } from "lucide-react";
 
 import {
@@ -63,6 +68,36 @@ export default function App() {
     strategyConfig[selectedCompany] || strategyConfig["atual-card"],
   );
 
+  // Account Health State
+  const defaultAccountHealth = {
+    basic: { bmVerified: false, paymentMethods: false, pagesConnected: false, spendingLimit: false },
+    campaign: { naming: false, audiences: false, cboAbo: false },
+    tracking: { pixel: false, capi: false, events: false, utm: false },
+    metrics: {
+      cro: {
+        lcp: { value: 2.1, good: 4.0, excellent: 2.5, inverse: false, label: "LCP (Tempo de Carregamento)", desc: "Tempo exato que o elemento principal da página de destino leva para renderizar.", unit: "s" },
+        dropoff: { value: 18, good: 30, excellent: 15, inverse: false, label: "Taxa de Queda (Drop-off Rate)", desc: "Quebra percentual entre Cliques no Link (Meta) e Views da Página (Pixel/GA4).", unit: "%" },
+        bounce: { value: 45, good: 70, excellent: 40, inverse: false, label: "Taxa de Rejeição (Bounce Rate)", desc: "Percentual de usuários de tráfego pago que saem do site sem interagir.", unit: "%" }
+      },
+      creative: {
+        frequency: { value: 2.2, good: 3.0, excellent: 2.0, inverse: false, label: "Frequência (7 Dias)", desc: "Quantas vezes o mesmo usuário viu nossos anúncios (público frio).", unit: "" },
+        outboundCTR: { value: 1.1, good: 0.5, excellent: 1.5, inverse: true, label: "CTR de Saída (Outbound)", desc: "Percentual real de pessoas que viram a arte e clicaram para sair do Meta.", unit: "%" },
+        hookRate: { value: 28, good: 20, excellent: 35, inverse: true, label: "Hook Rate (Retenção 3s)", desc: "Percentual do público que parou de rolar o feed nos primeiros 3s do vídeo.", unit: "%" }
+      },
+      data: {
+        emq: { value: 6.5, good: 4.0, excellent: 6.0, inverse: true, label: "Event Match Quality (EMQ)", desc: "Nota de correspondência do Meta para os dados do cliente (E-mail, IP, Telefone).", unit: "" },
+        discrepancy: { value: 8, good: 20, excellent: 10, inverse: false, label: "Discrepância (Meta vs GA4)", desc: "Diferença entre vendas marcadas no painel do Meta e compras reais lidas no GA4.", unit: "%" },
+        deduplication: { value: 92, good: 80, excellent: 95, inverse: true, label: "Taxa de Desduplicação", desc: "Eficiência na fusão dos eventos enviados pelo Navegador (Pixel) e Servidor (API).", unit: "%" }
+      },
+      finance: {
+        cpa: { value: 85, good: 100, excellent: 80, inverse: false, label: "CPA Atual vs CPA Teto", desc: "Relação entre o custo de aquisição de hoje e o limite máximo para não dar prejuízo.", unit: "%" },
+        roas: { value: 3.5, good: 2.0, excellent: 4.0, inverse: true, label: "ROAS Atual (Tráfego Pago)", desc: "Retorno sobre o investimento publicitário direto (Faturamento Ads / Custo Ads).", unit: "x" }
+      }
+    }
+  };
+  const [accountHealth, setAccountHealth] = useState(defaultAccountHealth);
+  const [isSavingHealth, setIsSavingHealth] = useState(false);
+
   // Google Sheets Data State (Revenue)
   const [sheetData, setSheetData] = useState<any[]>([]);
   const [sheetHeaders, setSheetHeaders] = useState<string[]>([]);
@@ -89,26 +124,41 @@ export default function App() {
   const TRAFFIC_SHEET_ID = "1om3vD7mik6psxaLjt6QGqnkEnGdpr6T5dBrNIjYa4BY";
 
   useEffect(() => {
-    const fetchStrategy = async () => {
+    const fetchData = async () => {
       try {
-        const { data, error } = await supabase
-          .from('strategies')
-          .select('strategy_data')
-          .eq('company_id', selectedCompany)
-          .single();
+        const [strategyRes, healthRes] = await Promise.all([
+          supabase.from('strategies').select('strategy_data').eq('company_id', selectedCompany).single(),
+          supabase.from('account_health').select('health_data').eq('company_id', selectedCompany).single()
+        ]);
 
-        if (data && data.strategy_data) {
-          setLocalStrategy(data.strategy_data);
+        if (strategyRes.data && strategyRes.data.strategy_data) {
+          setLocalStrategy(strategyRes.data.strategy_data);
         } else {
           setLocalStrategy(strategyConfig[selectedCompany] || strategyConfig["atual-card"]);
         }
+
+        if (healthRes.data && healthRes.data.health_data) {
+          // Merge to ensure missing fields from older saves get the new metrics object
+          const loadedHealth = healthRes.data.health_data;
+          setAccountHealth({
+            ...defaultAccountHealth,
+            ...loadedHealth,
+            metrics: {
+              ...defaultAccountHealth.metrics,
+              ...loadedHealth.metrics
+            }
+          });
+        } else {
+          setAccountHealth(defaultAccountHealth);
+        }
       } catch (err) {
-        console.error("Strategy load error", err);
+        console.error("Data load error", err);
         setLocalStrategy(strategyConfig[selectedCompany] || strategyConfig["atual-card"]);
+        setAccountHealth(defaultAccountHealth);
       }
     };
     if (isAuthenticated) {
-      fetchStrategy();
+      fetchData();
     }
     setIsEditingStrategy(false);
   }, [selectedCompany, isAuthenticated]);
@@ -245,6 +295,105 @@ export default function App() {
       console.error(err);
     } finally {
       setIsSavingStrategy(false);
+    }
+  };
+
+  const handleHealthCheckChange = async (category: "basic" | "campaign" | "tracking", item: string, value: boolean) => {
+    const newHealthState = {
+      ...accountHealth,
+      [category]: {
+        ...accountHealth[category as keyof typeof accountHealth],
+        [item]: value
+      }
+    };
+
+    setAccountHealth(newHealthState);
+    setIsSavingHealth(true);
+
+    try {
+      await supabase
+        .from('account_health')
+        .upsert({
+          company_id: selectedCompany,
+          health_data: newHealthState
+        }, { onConflict: 'company_id' });
+    } catch (err) {
+      console.error("Erro ao salvar saúde da conta:", err);
+    } finally {
+      setIsSavingHealth(false);
+    }
+  };
+
+  const calculateHealthScore = (category: "basic" | "campaign" | "tracking") => {
+    const items = Object.values(accountHealth[category as keyof typeof accountHealth]);
+    const checked = items.filter(Boolean).length;
+    return (checked / items.length) * 10;
+  };
+
+  const getHealthColorConfig = (score: number) => {
+    if (score < 5) return { text: 'text-red-600', bg: 'bg-red-50', border: 'border-red-200', circle: 'stroke-red-500', bar: 'bg-red-500', label: 'Crítico' };
+    if (score < 7) return { text: 'text-amber-500', bg: 'bg-amber-50', border: 'border-amber-200', circle: 'stroke-amber-500', bar: 'bg-amber-500', label: 'Atenção' };
+    if (score < 9) return { text: 'text-emerald-500', bg: 'bg-emerald-50', border: 'border-emerald-200', circle: 'stroke-emerald-500', bar: 'bg-emerald-500', label: 'Bom' };
+    return { text: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-200', circle: 'stroke-blue-600', bar: 'bg-blue-600', label: 'Excelente' };
+  };
+
+  const basicScore = calculateHealthScore('basic');
+  const campaignScore = calculateHealthScore('campaign');
+  const trackingScore = calculateHealthScore('tracking');
+  const overallHealthScore = (basicScore + campaignScore + trackingScore) / 3;
+  const overallHealthConfig = getHealthColorConfig(overallHealthScore);
+
+  const getMetricHealthColor = (metric: any) => {
+    const { value, good, excellent, inverse } = metric;
+
+    // Parse value to number just in case
+    const numValue = Number(value);
+    const numGood = Number(good);
+    const numExcellent = Number(excellent);
+
+    if (inverse) {
+      if (numValue >= numExcellent) return 'text-emerald-500';
+      if (numValue >= numGood) return 'text-amber-500';
+      return 'text-red-500';
+    } else {
+      if (numValue <= numExcellent) return 'text-emerald-500';
+      if (numValue <= numGood) return 'text-amber-500';
+      return 'text-red-500';
+    }
+  };
+
+  const handleMetricChange = async (moduleName: string, metricKey: string, field: 'value' | 'good' | 'excellent', newValue: string) => {
+    const numValue = Number(newValue);
+    if (isNaN(numValue)) return;
+
+    const newHealthState = {
+      ...accountHealth,
+      metrics: {
+        ...accountHealth.metrics,
+        [moduleName]: {
+          ...(accountHealth.metrics as any)[moduleName],
+          [metricKey]: {
+            ...(accountHealth.metrics as any)[moduleName][metricKey],
+            [field]: numValue
+          }
+        }
+      }
+    };
+
+    setAccountHealth(newHealthState);
+    setIsSavingHealth(true);
+
+    try {
+      await supabase
+        .from('account_health')
+        .upsert({
+          company_id: selectedCompany,
+          health_data: newHealthState
+        }, { onConflict: 'company_id' });
+    } catch (err) {
+      console.error("Erro ao salvar métricas:", err);
+    } finally {
+      setIsSavingHealth(false);
     }
   };
 
@@ -616,6 +765,11 @@ export default function App() {
                 id: "strategy",
                 label: "Estratégia",
                 icon: <Lightbulb className="w-4 h-4" />,
+              },
+              {
+                id: "account-health",
+                label: "Saúde da Conta",
+                icon: <Activity className="w-4 h-4" />,
               },
             ].map((tab) => (
               <button
@@ -1485,7 +1639,303 @@ export default function App() {
               )}
             </div>
           )}
+
+          {activeTab === "account-health" && (
+            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-neutral-200 shadow-sm">
+                <div>
+                  <h2 className="text-xl font-bold text-neutral-800 mb-1">
+                    Auditoria: Saúde da Conta
+                  </h2>
+                  <p className="text-sm text-neutral-500">
+                    Verifique se a configuração técnica da {currentCompany?.name} está de acordo com as melhores práticas.
+                  </p>
+                </div>
+                <div className={`flex items-center gap-4 px-5 py-3 rounded-xl border ${overallHealthConfig.bg} ${overallHealthConfig.border}`}>
+                  <div>
+                    <div className="text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-0.5">Nota Geral</div>
+                    <div className={`text-2xl font-bold ${overallHealthConfig.text}`}>{overallHealthScore.toFixed(1)} <span className="text-sm">/ 10</span></div>
+                  </div>
+                  <div className="relative w-14 h-14">
+                    <svg className="w-full h-full transform -rotate-90">
+                      <circle cx="28" cy="28" r="24" className="stroke-neutral-200" strokeWidth="6" fill="none" />
+                      <circle cx="28" cy="28" r="24" className={`${overallHealthConfig.circle} transition-all duration-1000 ease-out`} strokeWidth="6" fill="none" strokeDasharray="150" strokeDashoffset={150 - (150 * overallHealthScore) / 10} strokeLinecap="round" />
+                    </svg>
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <Activity className={`w-5 h-5 ${overallHealthConfig.text}`} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Basic Configs */}
+                <HealthCategoryCard
+                  title="Configurações Básicas"
+                  score={basicScore}
+                  config={getHealthColorConfig(basicScore)}
+                  items={[
+                    { id: 'bmVerified', label: 'Business Manager Verificada' },
+                    { id: 'paymentMethods', label: 'Métodos de Pagamento Secundários Ativos' },
+                    { id: 'pagesConnected', label: 'Páginas do Facebook/IG Conectadas Corretamente' },
+                    { id: 'spendingLimit', label: 'Limite de Gastos Configurado' },
+                  ]}
+                  state={accountHealth.basic}
+                  onChange={(item, val) => handleHealthCheckChange('basic', item, val)}
+                />
+
+                {/* Campaign Structure */}
+                <HealthCategoryCard
+                  title="Estrutura de Campanhas"
+                  score={campaignScore}
+                  config={getHealthColorConfig(campaignScore)}
+                  items={[
+                    { id: 'naming', label: 'Nomenclatura Padrão Aplicada Sistematicamente' },
+                    { id: 'audiences', label: 'Públicos Frios e Quentes Separados' },
+                    { id: 'cboAbo', label: 'Estratégias de CBO/ABO aplicadas no Estágio Correto' },
+                  ]}
+                  state={accountHealth.campaign}
+                  onChange={(item, val) => handleHealthCheckChange('campaign', item, val)}
+                />
+
+                {/* Tracking & API */}
+                <HealthCategoryCard
+                  title="Traqueamento e API"
+                  score={trackingScore}
+                  config={getHealthColorConfig(trackingScore)}
+                  items={[
+                    { id: 'pixel', label: 'Pixel Base Instalado' },
+                    { id: 'capi', label: 'API de Conversões (CAPI) Configurada com Nota > 8' },
+                    { id: 'events', label: 'Eventos Base (Page View, Lead, Purchase) Priorizados' },
+                    { id: 'utm', label: 'UTMs Padronizadas em todos os Anúncios' },
+                  ]}
+                  state={accountHealth.tracking}
+                  onChange={(item, val) => handleHealthCheckChange('tracking', item, val)}
+                />
+              </div>
+
+              {/* Advanced Analytical Modules Divider */}
+              <div className="pt-8 pb-4">
+                <h2 className="text-xl font-bold text-neutral-800 mb-1">Módulos Analíticos Avançados</h2>
+                <p className="text-sm text-neutral-500">Métricas operacionais de performance divididas por área de atuação. Edite os valores ou limiares (engrenagem) para personalizar a régua.</p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {/* Modulo 1: CRO */}
+                <AdHealthModule title="CRO e Experiência de Página">
+                  {Object.entries((accountHealth.metrics as any).cro).map(([key, metric]: [string, any]) => (
+                    <EditableMetricCard key={key} metric={metric} metricKey={key} moduleName="cro" getMetricHealthColor={getMetricHealthColor} onChange={handleMetricChange} />
+                  ))}
+                </AdHealthModule>
+
+                {/* Modulo 2: Creative */}
+                <AdHealthModule title="Saúde Criativa e Retenção">
+                  {Object.entries((accountHealth.metrics as any).creative).map(([key, metric]: [string, any]) => (
+                    <EditableMetricCard key={key} metric={metric} metricKey={key} moduleName="creative" getMetricHealthColor={getMetricHealthColor} onChange={handleMetricChange} />
+                  ))}
+                </AdHealthModule>
+
+                {/* Modulo 3: Data */}
+                <AdHealthModule title="Qualidade de Dados (CAPI)">
+                  {Object.entries((accountHealth.metrics as any).data).map(([key, metric]: [string, any]) => (
+                    <EditableMetricCard key={key} metric={metric} metricKey={key} moduleName="data" getMetricHealthColor={getMetricHealthColor} onChange={handleMetricChange} />
+                  ))}
+                </AdHealthModule>
+
+                {/* Modulo 4: Finance */}
+                <AdHealthModule title="Saúde Financeira e Escala">
+                  {Object.entries((accountHealth.metrics as any).finance).map(([key, metric]: [string, any]) => (
+                    <EditableMetricCard key={key} metric={metric} metricKey={key} moduleName="finance" getMetricHealthColor={getMetricHealthColor} onChange={handleMetricChange} />
+                  ))}
+                </AdHealthModule>
+              </div>
+
+              {isSavingHealth && (
+                <div className="fixed bottom-6 right-6 bg-neutral-900 text-white px-4 py-2 rounded-lg shadow-xl flex items-center gap-2 text-sm font-medium animate-in slide-in-from-bottom-5">
+                  <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                  Sincronizando...
+                </div>
+              )}
+            </div>
+          )}
         </main>
+      </div>
+    </div>
+  );
+}
+
+function HealthCategoryCard({ title, score, config, items, state, onChange }: {
+  title: string,
+  score: number,
+  config: any,
+  items: { id: string, label: string }[],
+  state: Record<string, boolean>,
+  onChange: (id: string, val: boolean) => void
+}) {
+  return (
+    <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm flex flex-col overflow-hidden">
+      <div className={`p-5 min-h-[140px] flex flex-col justify-between ${config.bg} border-b ${config.border} transition-colors duration-500`}>
+        <div className="flex justify-between items-start gap-2">
+          <h3 className="font-bold text-neutral-800 leading-tight">{title}</h3>
+          <span className={`px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wide bg-white shadow-sm ${config.text}`}>
+            {config.label}
+          </span>
+        </div>
+        <div className="mt-4">
+          <div className="flex items-end justify-between mb-2">
+            <span className={`text-3xl font-black ${config.text}`}>{score.toFixed(1)}</span>
+            <span className="text-xs font-semibold text-neutral-500 uppercase">Score Calculado</span>
+          </div>
+          <div className="h-1.5 w-full bg-black/5 rounded-full overflow-hidden">
+            <div className={`h-full ${config.bar} transition-all duration-500 ease-out`} style={{ width: `${score * 10}%` }} />
+          </div>
+        </div>
+      </div>
+      <div className="p-5 flex-1 bg-white">
+        <ul className="space-y-3.5">
+          {items.map(item => (
+            <li key={item.id} className="flex items-start gap-3 group">
+              <button
+                onClick={() => onChange(item.id, !state[item.id])}
+                className="mt-0.5 shrink-0 transition-transform active:scale-95 focus:outline-none"
+              >
+                {state[item.id] ? (
+                  <CheckCircle2 className={`w-5 h-5 ${config.text}`} />
+                ) : (
+                  <div className="w-5 h-5 rounded-full border-2 border-neutral-300 group-hover:border-neutral-400 transition-colors" />
+                )}
+              </button>
+              <span
+                className={`text-sm leading-tight mt-0.5 cursor-pointer select-none transition-colors ${state[item.id] ? 'text-neutral-900 font-medium' : 'text-neutral-500 hover:text-neutral-700'}`}
+                onClick={() => onChange(item.id, !state[item.id])}
+              >
+                {item.label}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
+function AdHealthModule({ title, children }: { title: string, children: React.ReactNode }) {
+  return (
+    <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm p-6 flex flex-col">
+      <h3 className="font-bold text-neutral-800 mb-5">{title}</h3>
+      <div className="space-y-4 flex-1">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function EditableMetricCard({ metric, metricKey, moduleName, getMetricHealthColor, onChange }: {
+  key?: React.Key, metric: any, metricKey: string, moduleName: string, getMetricHealthColor: (m: any) => string, onChange: (mod: string, key: string, field: 'value' | 'good' | 'excellent', val: string) => void
+}) {
+  const [isEditingValue, setIsEditingValue] = useState(false);
+  const [isEditingThresholds, setIsEditingThresholds] = useState(false);
+
+  // Local state for immediate typing before onBlur save
+  const [localVal, setLocalVal] = useState(metric.value.toString());
+  const [localGood, setLocalGood] = useState(metric.good.toString());
+  const [localExc, setLocalExc] = useState(metric.excellent.toString());
+
+  // Keep local state in sync if prop changes from elsewhere
+  useEffect(() => { setLocalVal(metric.value.toString()); }, [metric.value]);
+  useEffect(() => { setLocalGood(metric.good.toString()); }, [metric.good]);
+  useEffect(() => { setLocalExc(metric.excellent.toString()); }, [metric.excellent]);
+
+  const valueColorClass = getMetricHealthColor(metric);
+
+  const handleSaveValue = () => {
+    setIsEditingValue(false);
+    if (localVal !== metric.value.toString()) {
+      onChange(moduleName, metricKey, 'value', localVal);
+    }
+  };
+
+  const handleSaveThresholds = () => {
+    setIsEditingThresholds(false);
+    if (localGood !== metric.good.toString()) onChange(moduleName, metricKey, 'good', localGood);
+    if (localExc !== metric.excellent.toString()) onChange(moduleName, metricKey, 'excellent', localExc);
+  };
+
+  return (
+    <div className="flex flex-col p-3 rounded-xl border border-neutral-100 bg-neutral-50 hover:bg-neutral-50/80 transition-colors group">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-1.5">
+          <span className="text-sm font-semibold text-neutral-700">{metric.label}</span>
+          <div className="relative flex items-center justify-center">
+            <Info className="w-4 h-4 text-neutral-400 peer hover:text-indigo-500 transition-colors cursor-help" />
+            <div className="invisible peer-hover:visible absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-48 p-2 bg-slate-800 text-white text-xs rounded shadow-xl z-20 font-medium leading-relaxed">
+              {metric.desc}
+              <div className="absolute left-1/2 -bottom-1 -translate-x-1/2 w-2 h-2 bg-slate-800 rotate-45"></div>
+            </div>
+          </div>
+        </div>
+        <button
+          onClick={() => setIsEditingThresholds(!isEditingThresholds)}
+          className="p-1 rounded-md text-neutral-400 hover:text-indigo-600 hover:bg-white transition-all opacity-0 group-hover:opacity-100"
+          title="Editar Limiares"
+        >
+          <Settings className="w-4 h-4" />
+        </button>
+      </div>
+
+      <div className="flex items-center justify-between">
+        <div>
+          {isEditingValue ? (
+            <div className="flex items-center gap-1">
+              <input
+                autoFocus
+                type="number"
+                step="0.1"
+                className="w-16 text-xl font-bold bg-white border border-indigo-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500 px-1"
+                value={localVal}
+                onChange={e => setLocalVal(e.target.value)}
+                onBlur={handleSaveValue}
+                onKeyDown={e => e.key === 'Enter' && handleSaveValue()}
+              />
+              <span className="text-neutral-500 font-medium">{metric.unit}</span>
+            </div>
+          ) : (
+            <div
+              className={`text-2xl font-black cursor-pointer hover:opacity-80 transition-opacity ${valueColorClass}`}
+              onClick={() => setIsEditingValue(true)}
+              title="Clique para editar"
+            >
+              {metric.value}{metric.unit}
+            </div>
+          )}
+        </div>
+
+        {/* Threshold indicators */}
+        <div className="flex flex-col items-end gap-1 relative z-10">
+          {isEditingThresholds ? (
+            <div className="flex gap-2">
+              <div className="flex flex-col text-[10px] items-end">
+                <span className="font-semibold text-emerald-600 uppercase">Exc</span>
+                <input type="number" step="0.1" className="w-10 p-0.5 text-center bg-white border border-neutral-300 rounded font-bold" value={localExc} onChange={e => setLocalExc(e.target.value)} onBlur={handleSaveThresholds} onKeyDown={e => e.key === 'Enter' && handleSaveThresholds()} />
+              </div>
+              <div className="flex flex-col text-[10px] items-end">
+                <span className="font-semibold text-amber-500 uppercase">Bom</span>
+                <input type="number" step="0.1" className="w-10 p-0.5 text-center bg-white border border-neutral-300 rounded font-bold" value={localGood} onChange={e => setLocalGood(e.target.value)} onBlur={handleSaveThresholds} onKeyDown={e => e.key === 'Enter' && handleSaveThresholds()} />
+              </div>
+            </div>
+          ) : (
+            <div className="flex gap-2 text-[10px] font-bold uppercase tracking-wider">
+              <div className="flex flex-col items-end text-neutral-400">
+                <span className="text-emerald-500">Exc</span>
+                {metric.inverse ? '>' : '<'} {metric.excellent}{metric.unit}
+              </div>
+              <div className="flex flex-col items-end text-neutral-400">
+                <span className="text-amber-500">Bom</span>
+                {metric.inverse ? '>' : '<'} {metric.good}{metric.unit}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
