@@ -38,7 +38,7 @@ import { supabase } from "./lib/supabase";
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [loginUsername, setLoginUsername] = useState("");
+  const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [loginError, setLoginError] = useState("");
   const [isLoggingIn, setIsLoggingIn] = useState(false);
@@ -107,9 +107,30 @@ export default function App() {
         setLocalStrategy(strategyConfig[selectedCompany] || strategyConfig["atual-card"]);
       }
     };
-    fetchStrategy();
+    if (isAuthenticated) {
+      fetchStrategy();
+    }
     setIsEditingStrategy(false);
-  }, [selectedCompany]);
+  }, [selectedCompany, isAuthenticated]);
+
+  // Check Supabase Auth Session on mount
+  useEffect(() => {
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        setIsAuthenticated(true);
+      }
+    };
+
+    checkSession();
+
+    // Listen to auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setIsAuthenticated(!!session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   useEffect(() => {
     setIsFetchingSheet(true);
@@ -468,17 +489,17 @@ export default function App() {
     setLoginError("");
 
     try {
-      const { data, error } = await supabase
-        .from('app_users')
-        .select('*')
-        .eq('username', loginUsername)
-        .eq('password', loginPassword)
-        .single();
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: loginEmail,
+        password: loginPassword,
+      });
 
-      if (error || !data) {
-        setLoginError("Usuário ou senha inválidos.");
+      if (error || !data.user) {
+        setLoginError("E-mail ou senha inválidos.");
       } else {
         setIsAuthenticated(true);
+        setLoginEmail("");
+        setLoginPassword("");
       }
     } catch (err) {
       setLoginError("Erro ao conectar.");
@@ -500,11 +521,11 @@ export default function App() {
 
             <form onSubmit={handleLogin} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-1">Usuário</label>
+                <label className="block text-sm font-medium text-neutral-700 mb-1">E-mail</label>
                 <input
-                  type="text"
-                  value={loginUsername}
-                  onChange={(e) => setLoginUsername(e.target.value)}
+                  type="email"
+                  value={loginEmail}
+                  onChange={(e) => setLoginEmail(e.target.value)}
                   className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-colors"
                   required
                 />
