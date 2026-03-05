@@ -32,6 +32,9 @@ import {
   AlertCircle,
   Info,
   Settings,
+  ArrowUpRight,
+  ArrowDownRight,
+  Minus
 } from "lucide-react";
 
 import {
@@ -40,6 +43,36 @@ import {
   strategyConfig,
 } from "./data/mockData";
 import { supabase } from "./lib/supabase";
+
+const VariationBadge = ({ current, previous, inverse = false, neutral = false }: { current: number, previous: number, inverse?: boolean, neutral?: boolean }) => {
+  if (!previous || previous === 0) return null;
+  const rawVariation = ((current - previous) / previous) * 100;
+  const variation = isNaN(rawVariation) ? 0 : rawVariation;
+  const isPositive = variation > 0;
+  const isNeutral = variation === 0;
+
+  // Decide colors
+  let colorClass = "text-neutral-500 bg-neutral-100";
+  let Icon = Minus;
+
+  if (!isNeutral) {
+    if (neutral) {
+      colorClass = "text-neutral-600 bg-neutral-100";
+      Icon = isPositive ? ArrowUpRight : ArrowDownRight;
+    } else {
+      const isGood = inverse ? !isPositive : isPositive;
+      colorClass = isGood ? "text-emerald-700 bg-emerald-50" : "text-red-700 bg-red-50";
+      Icon = isPositive ? ArrowUpRight : ArrowDownRight;
+    }
+  }
+
+  return (
+    <div className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium ${colorClass}`} title={`Anterior: ${previous}`}>
+      {!isNeutral && <Icon className="w-3 h-3" />}
+      <span>{Math.abs(variation).toFixed(1)}%</span>
+    </div>
+  );
+};
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -926,10 +959,18 @@ export default function App() {
     };
 
     const monthMetrics = calcMetricsForRange(firstDay, lastDay);
-    const weeksMetrics = weeks.map(w => ({
-      ...w,
-      metrics: calcMetricsForRange(w.start, w.end)
-    }));
+    const weeksMetrics = weeks.map(w => {
+      const prevStart = new Date(w.start);
+      prevStart.setDate(prevStart.getDate() - 7);
+      const prevEnd = new Date(w.end);
+      prevEnd.setDate(prevEnd.getDate() - 7);
+
+      return {
+        ...w,
+        metrics: calcMetricsForRange(w.start, w.end),
+        prevMetrics: calcMetricsForRange(prevStart, prevEnd)
+      };
+    });
 
     return { month: monthMetrics, weeks: weeksMetrics };
   }, [activeTab, monthlyTabMonth, sheetData, trafficData, googleAdsData]);
@@ -2140,21 +2181,33 @@ export default function App() {
                         <div className="space-y-3">
                           <div className="flex justify-between items-center text-sm">
                             <span className="text-neutral-500">Faturamento</span>
-                            <span className="font-semibold text-neutral-900">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(week.metrics.revenue)}</span>
+                            <div className="flex items-center gap-2">
+                              <VariationBadge current={week.metrics.revenue} previous={week.prevMetrics.revenue} />
+                              <span className="font-semibold text-neutral-900">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(week.metrics.revenue)}</span>
+                            </div>
                           </div>
                           <div className="flex justify-between items-center text-sm">
                             <span className="text-neutral-500">Investimento</span>
-                            <span className="font-semibold text-indigo-700">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(week.metrics.totalInv)}</span>
+                            <div className="flex items-center gap-2">
+                              <VariationBadge current={week.metrics.totalInv} previous={week.prevMetrics.totalInv} neutral />
+                              <span className="font-semibold text-indigo-700">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(week.metrics.totalInv)}</span>
+                            </div>
                           </div>
                           <div className="flex justify-between items-center text-sm">
                             <span className="text-neutral-500">Compras</span>
-                            <span className="font-semibold text-blue-700">{week.metrics.purchases}</span>
+                            <div className="flex items-center gap-2">
+                              <VariationBadge current={week.metrics.purchases} previous={week.prevMetrics.purchases} />
+                              <span className="font-semibold text-blue-700">{week.metrics.purchases}</span>
+                            </div>
                           </div>
                           <div className="flex justify-between items-center text-sm pt-2 border-t border-neutral-200/60">
                             <span className="font-medium text-neutral-600">ROI da Semana</span>
-                            <span className={`font-bold ${week.metrics.roi >= 2 ? 'text-emerald-600' : week.metrics.roi >= 1 ? 'text-amber-600' : 'text-red-600'}`}>
-                              {week.metrics.roi.toFixed(2)}x
-                            </span>
+                            <div className="flex items-center gap-2">
+                              <VariationBadge current={week.metrics.roi} previous={week.prevMetrics.roi} />
+                              <span className={`font-bold ${week.metrics.roi >= 2 ? 'text-emerald-600' : week.metrics.roi >= 1 ? 'text-amber-600' : 'text-red-600'}`}>
+                                {week.metrics.roi.toFixed(2)}x
+                              </span>
+                            </div>
                           </div>
                         </div>
                       </div>
