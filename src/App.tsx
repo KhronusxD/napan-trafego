@@ -61,6 +61,10 @@ export default function App() {
     return d.toISOString().split('T')[0];
   });
   const [funnelSource, setFunnelSource] = useState<"all" | "meta" | "google">("all");
+  const [monthlyTabMonth, setMonthlyTabMonth] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  });
 
   // Strategy Edit State
   const [isEditingStrategy, setIsEditingStrategy] = useState(false);
@@ -882,6 +886,98 @@ export default function App() {
     );
   }
 
+  const monthlyMetrics = useMemo(() => {
+    if (activeTab !== "monthly") return null;
+
+    const [yearStr, monthStr] = monthlyTabMonth.split('-');
+    if (!yearStr || !monthStr) return null;
+
+    const year = parseInt(yearStr);
+    const month = parseInt(monthStr) - 1;
+
+    const weeks = [];
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+
+    let currentStart = new Date(firstDay);
+    let weekCount = 1;
+
+    while (currentStart <= lastDay) {
+      const currentEnd = new Date(currentStart);
+      while (currentEnd.getDay() !== 0 && currentEnd < lastDay) {
+        currentEnd.setDate(currentEnd.getDate() + 1);
+      }
+
+      weeks.push({
+        id: `week-${weekCount}`,
+        label: `Semana ${weekCount}`,
+        start: new Date(currentStart),
+        end: new Date(currentEnd),
+        dateLabel: `${currentStart.getDate().toString().padStart(2, '0')}/${(month + 1).toString().padStart(2, '0')} a ${currentEnd.getDate().toString().padStart(2, '0')}/${(month + 1).toString().padStart(2, '0')}`
+      });
+
+      currentStart = new Date(currentEnd);
+      currentStart.setDate(currentStart.getDate() + 1);
+      weekCount++;
+    }
+
+    const calcMetricsForRange = (start: Date, end: Date) => {
+      const isDateInRangeLocal = (d: Date | null) => {
+        if (!d) return false;
+        const norm = new Date(d);
+        norm.setHours(0, 0, 0, 0);
+        const ns = new Date(start); ns.setHours(0, 0, 0, 0);
+        const ne = new Date(end); ne.setHours(0, 0, 0, 0);
+        return norm >= ns && norm <= ne;
+      };
+
+      let revenue = 0, purchases = 0, invMeta = 0, invGoogle = 0;
+
+      sheetData.forEach(row => {
+        const d = parseDate(row["Data"]);
+        if (isDateInRangeLocal(d)) {
+          const rStr = row["Pedidos Pagos"] || "0";
+          const rNum = parseFloat(rStr.replace(/\./g, '').replace(',', '.'));
+          if (!isNaN(rNum)) revenue += rNum;
+          const pStr = row["Quantidade Pedidos"] || "0";
+          const pNum = parseInt(pStr, 10);
+          if (!isNaN(pNum)) purchases += pNum;
+        }
+      });
+
+      trafficData.forEach(row => {
+        const d = parseDate(row["Data"]);
+        if (isDateInRangeLocal(d)) {
+          const gStr = row["Investimento"] || row["Gastos"] || "0";
+          const g = parseFloat(gStr.replace(/\./g, '').replace(',', '.'));
+          if (!isNaN(g)) invMeta += g;
+        }
+      });
+
+      googleAdsData.forEach(row => {
+        const d = parseDate(row["Data"]);
+        if (isDateInRangeLocal(d)) {
+          const gStr = row["Investimento"] || row["Gastos"] || "0";
+          const g = parseFloat(gStr.replace(/\./g, '').replace(',', '.'));
+          if (!isNaN(g)) invGoogle += g;
+        }
+      });
+
+      const totalInv = invMeta + invGoogle;
+      const roi = (totalInv > 0 && revenue > 0) ? (revenue / totalInv) : 0;
+
+      return { revenue, purchases, totalInv, roi };
+    };
+
+    const monthMetrics = calcMetricsForRange(firstDay, lastDay);
+    const weeksMetrics = weeks.map(w => ({
+      ...w,
+      metrics: calcMetricsForRange(w.start, w.end)
+    }));
+
+    return { month: monthMetrics, weeks: weeksMetrics };
+  }, [activeTab, monthlyTabMonth, sheetData, trafficData, googleAdsData]);
+
   return (
     <div className="min-h-screen bg-neutral-50 font-sans text-neutral-900">
       {/* Header */}
@@ -942,6 +1038,11 @@ export default function App() {
                 id: "account-health",
                 label: "Saúde da Conta",
                 icon: <Activity className="w-4 h-4" />,
+              },
+              {
+                id: "monthly",
+                label: "Visão Mensal",
+                icon: <CalendarDays className="w-4 h-4" />,
               },
             ].map((tab) => (
               <button
@@ -1938,6 +2039,117 @@ export default function App() {
                 <div className="fixed bottom-6 right-6 bg-neutral-900 text-white px-4 py-2 rounded-lg shadow-xl flex items-center gap-2 text-sm font-medium animate-in slide-in-from-bottom-5">
                   <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
                   Sincronizando...
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === "monthly" && (
+            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-neutral-200 shadow-sm">
+                <h2 className="text-lg font-semibold text-neutral-800">
+                  Resumo Mensal
+                </h2>
+                <div className="flex items-center gap-2">
+                  <button onClick={handleRefresh} className="p-2 bg-neutral-100 hover:bg-neutral-200 rounded-lg text-neutral-600 transition-colors">
+                    <RefreshCw className={`w-4 h-4 ${isFetchingSheet || isFetchingTraffic || isFetchingGoogleAds ? 'animate-spin' : ''}`} />
+                  </button>
+                  <input
+                    type="month"
+                    value={monthlyTabMonth}
+                    onChange={(e) => setMonthlyTabMonth(e.target.value)}
+                    className="bg-neutral-50 border border-neutral-200 text-neutral-700 py-2 px-3 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+              </div>
+
+              {monthlyMetrics && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="bg-white rounded-2xl border border-neutral-200 p-6 shadow-sm flex flex-col">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-sm font-medium text-neutral-500">Faturamento</h3>
+                      <div className="p-2 bg-neutral-50 rounded-lg"><DollarSign className="w-5 h-5 text-emerald-600" /></div>
+                    </div>
+                    <div className="mt-auto">
+                      <div className="text-2xl font-semibold text-neutral-900 mb-1">
+                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(monthlyMetrics.month.revenue)}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="bg-white rounded-2xl border border-neutral-200 p-6 shadow-sm flex flex-col">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-sm font-medium text-neutral-500">Investimento</h3>
+                      <div className="p-2 bg-neutral-50 rounded-lg"><TrendingUp className="w-5 h-5 text-indigo-600" /></div>
+                    </div>
+                    <div className="mt-auto">
+                      <div className="text-2xl font-semibold text-neutral-900 mb-1">
+                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(monthlyMetrics.month.totalInv)}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="bg-white rounded-2xl border border-neutral-200 p-6 shadow-sm flex flex-col">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-sm font-medium text-neutral-500">Compras</h3>
+                      <div className="p-2 bg-neutral-50 rounded-lg"><ShoppingCart className="w-5 h-5 text-blue-600" /></div>
+                    </div>
+                    <div className="mt-auto">
+                      <div className="text-2xl font-semibold text-neutral-900 mb-1">
+                        {monthlyMetrics.month.purchases.toLocaleString('pt-BR')}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="bg-white rounded-2xl border border-neutral-200 p-6 shadow-sm flex flex-col">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-sm font-medium text-neutral-500">ROI</h3>
+                      <div className="p-2 bg-neutral-50 rounded-lg"><BarChart3 className="w-5 h-5 text-purple-600" /></div>
+                    </div>
+                    <div className="mt-auto">
+                      <div className="text-2xl font-semibold text-neutral-900 mb-1">
+                        {monthlyMetrics.month.roi.toFixed(2)}x
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {monthlyMetrics && monthlyMetrics.weeks.length > 0 && (
+                <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm p-6 mt-8">
+                  <h3 className="font-semibold text-neutral-800 mb-6 flex items-center gap-2">
+                    <Calendar className="w-5 h-5 text-indigo-600" />
+                    Comparativo Semanal
+                  </h3>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+                    {monthlyMetrics.weeks.map((week) => (
+                      <div key={week.id} className="border border-neutral-100 bg-neutral-50/50 rounded-xl p-5 hover:bg-white hover:shadow-md transition-all">
+                        <div className="flex items-center justify-between mb-4 pb-3 border-b border-neutral-200/60">
+                          <h4 className="font-semibold text-neutral-800">{week.label}</h4>
+                          <span className="text-xs font-medium text-neutral-500 bg-neutral-100 px-2 py-1 rounded">
+                            {week.dateLabel}
+                          </span>
+                        </div>
+                        <div className="space-y-3">
+                          <div className="flex justify-between items-center text-sm">
+                            <span className="text-neutral-500">Faturamento</span>
+                            <span className="font-semibold text-neutral-900">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(week.metrics.revenue)}</span>
+                          </div>
+                          <div className="flex justify-between items-center text-sm">
+                            <span className="text-neutral-500">Investimento</span>
+                            <span className="font-semibold text-indigo-700">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(week.metrics.totalInv)}</span>
+                          </div>
+                          <div className="flex justify-between items-center text-sm">
+                            <span className="text-neutral-500">Compras</span>
+                            <span className="font-semibold text-blue-700">{week.metrics.purchases}</span>
+                          </div>
+                          <div className="flex justify-between items-center text-sm pt-2 border-t border-neutral-200/60">
+                            <span className="font-medium text-neutral-600">ROI da Semana</span>
+                            <span className={`font-bold ${week.metrics.roi >= 2 ? 'text-emerald-600' : week.metrics.roi >= 1 ? 'text-amber-600' : 'text-red-600'}`}>
+                              {week.metrics.roi.toFixed(2)}x
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
