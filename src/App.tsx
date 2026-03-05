@@ -1087,7 +1087,7 @@ export default function App() {
           metaViews += vNum;
         }
 
-        const cartStr = row["Adições ao carrinho"] || row["Adições ao Carrinho"] || "0";
+        const cartStr = row["Adições no Carrinho"] || row["Adições ao Carrinho"] || row["Adições ao carrinho"] || "0";
         const cartNum = parseInt(cartStr.replace(/\./g, ''), 10);
         if (!isNaN(cartNum)) {
           carts += cartNum;
@@ -1101,13 +1101,13 @@ export default function App() {
           metaCheckouts += chkNum;
         }
 
-        const purcStr = row["Compras de no site"] || row["Compras"] || "0";
+        const purcStr = row["Compras Meta"] || row["Compras de no site"] || row["Compras"] || "0";
         const purcNum = parseInt(purcStr.replace(/\./g, ''), 10);
         if (!isNaN(purcNum)) {
           metaPurchases += purcNum;
         }
 
-        const revStr = row["Valor de conversão de compras no site"] || row["Faturamento"] || "0";
+        const revStr = row["Faturamento Meta Ads"] || row["Valor de conversão de compras no site"] || row["Faturamento"] || "0";
         const rev = parseFloat(revStr.replace(/\./g, '').replace(',', '.'));
         if (!isNaN(rev)) {
           metaRevenue += rev;
