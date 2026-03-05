@@ -98,6 +98,7 @@ export default function App() {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   });
+  const [expandedWeekId, setExpandedWeekId] = useState<string | null>(null);
 
   // Strategy Edit State
   const [isEditingStrategy, setIsEditingStrategy] = useState(false);
@@ -921,6 +922,8 @@ export default function App() {
       };
 
       let revenue = 0, purchases = 0, invMeta = 0, invGoogle = 0;
+      let metaRevenue = 0, googleRevenue = 0;
+      let metaPurchases = 0, googlePurchases = 0;
 
       sheetData.forEach(row => {
         const d = parseDate(row["Data"]);
@@ -940,6 +943,14 @@ export default function App() {
           const gStr = row["Investimento"] || row["Gastos"] || "0";
           const g = parseFloat(gStr.replace(/\./g, '').replace(',', '.'));
           if (!isNaN(g)) invMeta += g;
+
+          const pStr = row["Compras Meta"] || "0";
+          const p = parseFloat(pStr.replace(/\./g, '').replace(',', '.'));
+          if (!isNaN(p)) metaPurchases += p;
+
+          const fStr = row["Faturamento Meta Ads"] || "0";
+          const f = parseFloat(fStr.replace(/\./g, '').replace(',', '.'));
+          if (!isNaN(f)) metaRevenue += f;
         }
       });
 
@@ -949,13 +960,26 @@ export default function App() {
           const gStr = row["Investimento"] || row["Gastos"] || "0";
           const g = parseFloat(gStr.replace(/\./g, '').replace(',', '.'));
           if (!isNaN(g)) invGoogle += g;
+
+          const pStr = row["Compras Meta"] || row["Conversões"] || "0";
+          const p = parseFloat(pStr.replace(/\./g, '').replace(',', '.'));
+          if (!isNaN(p)) googlePurchases += p;
+
+          const fStr = row["Faturamento Google Ads"] || row["Valor da conversão"] || "0";
+          const f = parseFloat(fStr.replace(/\./g, '').replace(',', '.'));
+          if (!isNaN(f)) googleRevenue += f;
         }
       });
 
       const totalInv = invMeta + invGoogle;
       const roi = (totalInv > 0 && revenue > 0) ? (revenue / totalInv) : 0;
+      const metaRoi = (invMeta > 0 && metaRevenue > 0) ? (metaRevenue / invMeta) : 0;
+      const googleRoi = (invGoogle > 0 && googleRevenue > 0) ? (googleRevenue / invGoogle) : 0;
 
-      return { revenue, purchases, totalInv, roi };
+      return {
+        revenue, purchases, totalInv, roi,
+        metaRevenue, googleRevenue, metaPurchases, googlePurchases, invMeta, invGoogle, metaRoi, googleRoi
+      };
     };
 
     const monthMetrics = calcMetricsForRange(firstDay, lastDay);
@@ -2170,48 +2194,106 @@ export default function App() {
                     Comparativo Semanal
                   </h3>
                   <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-                    {monthlyMetrics.weeks.map((week) => (
-                      <div key={week.id} className="border border-neutral-100 bg-neutral-50/50 rounded-xl p-5 hover:bg-white hover:shadow-md transition-all">
-                        <div className="flex items-center justify-between mb-4 pb-3 border-b border-neutral-200/60">
-                          <h4 className="font-semibold text-neutral-800">{week.label}</h4>
-                          <span className="text-xs font-medium text-neutral-500 bg-neutral-100 px-2 py-1 rounded">
-                            {week.dateLabel}
-                          </span>
+                    {monthlyMetrics.weeks.map((week) => {
+                      const isExpanded = expandedWeekId === week.id;
+                      return (
+                        <div key={week.id} className={`border ${isExpanded ? 'border-indigo-200 shadow-md ring-1 ring-indigo-50/50 block-expanded z-10 scale-[1.01]' : 'border-neutral-100 shadow-sm'} bg-white rounded-xl p-5 transition-all duration-300 relative`}>
+                          <div className="flex items-center justify-between mb-4 pb-3 border-b border-neutral-200/60 cursor-pointer group" onClick={() => setExpandedWeekId(isExpanded ? null : week.id)}>
+                            <div className="flex items-center gap-2">
+                              <h4 className="font-semibold text-neutral-800 flex items-center gap-1.5 transition-colors group-hover:text-indigo-600">
+                                {week.label}
+                                <ChevronDown className={`w-4 h-4 text-neutral-400 transition-transform duration-300 ${isExpanded ? 'rotate-180 text-indigo-500' : ''}`} />
+                              </h4>
+                            </div>
+                            <span className="text-xs font-semibold text-neutral-500 bg-neutral-100 px-2.5 py-1 rounded shadow-inner">
+                              {week.dateLabel}
+                            </span>
+                          </div>
+                          <div className="space-y-3">
+                            <div className="flex justify-between items-center text-sm">
+                              <span className="text-neutral-500">Faturamento</span>
+                              <div className="flex items-center gap-2">
+                                <VariationBadge current={week.metrics.revenue} previous={week.prevMetrics.revenue} />
+                                <span className="font-semibold text-neutral-900">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(week.metrics.revenue)}</span>
+                              </div>
+                            </div>
+                            <div className="flex justify-between items-center text-sm">
+                              <span className="text-neutral-500">Investimento</span>
+                              <div className="flex items-center gap-2">
+                                <VariationBadge current={week.metrics.totalInv} previous={week.prevMetrics.totalInv} neutral />
+                                <span className="font-semibold text-indigo-700">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(week.metrics.totalInv)}</span>
+                              </div>
+                            </div>
+                            <div className="flex justify-between items-center text-sm">
+                              <span className="text-neutral-500">Compras</span>
+                              <div className="flex items-center gap-2">
+                                <VariationBadge current={week.metrics.purchases} previous={week.prevMetrics.purchases} />
+                                <span className="font-semibold text-blue-700">{week.metrics.purchases}</span>
+                              </div>
+                            </div>
+                            <div className="flex justify-between items-center text-sm pt-2 border-t border-neutral-200/60">
+                              <span className="font-medium text-neutral-600">ROI da Semana</span>
+                              <div className="flex items-center gap-2">
+                                <VariationBadge current={week.metrics.roi} previous={week.prevMetrics.roi} />
+                                <span className={`font-bold ${week.metrics.roi >= 2 ? 'text-emerald-600' : week.metrics.roi >= 1 ? 'text-amber-600' : 'text-red-600'}`}>
+                                  {week.metrics.roi.toFixed(2)}x
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {isExpanded && (
+                            <div className="mt-4 pt-4 border-t border-indigo-100 flex gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                              {/* Meta Ads Column */}
+                              <div className="flex-1 bg-blue-50/50 border border-blue-100/50 rounded-lg p-3">
+                                <h5 className="text-[11px] font-bold text-blue-800 uppercase tracking-wider mb-2 flex items-center gap-1.5"><Activity className="w-3 h-3" /> Meta Ads</h5>
+                                <div className="space-y-1.5">
+                                  <div className="flex justify-between text-[13px]">
+                                    <span className="text-blue-600/70">Fat.</span>
+                                    <span className="font-semibold text-blue-900">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(week.metrics.metaRevenue)}</span>
+                                  </div>
+                                  <div className="flex justify-between text-[13px]">
+                                    <span className="text-blue-600/70">Inv.</span>
+                                    <span className="font-semibold text-blue-900">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(week.metrics.invMeta)}</span>
+                                  </div>
+                                  <div className="flex justify-between text-[13px]">
+                                    <span className="text-blue-600/70">Compras</span>
+                                    <span className="font-semibold text-blue-900">{week.metrics.metaPurchases}</span>
+                                  </div>
+                                  <div className="flex justify-between text-[13px] pt-1 border-t border-blue-100">
+                                    <span className="font-medium text-blue-800">ROI</span>
+                                    <span className="font-bold text-blue-700">{week.metrics.metaRoi.toFixed(2)}x</span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Google Ads Column */}
+                              <div className="flex-1 bg-rose-50/50 border border-rose-100/50 rounded-lg p-3">
+                                <h5 className="text-[11px] font-bold text-rose-800 uppercase tracking-wider mb-2 flex items-center gap-1.5"><Search className="w-3 h-3" /> Google Ads</h5>
+                                <div className="space-y-1.5">
+                                  <div className="flex justify-between text-[13px]">
+                                    <span className="text-rose-600/70">Fat.</span>
+                                    <span className="font-semibold text-rose-900">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(week.metrics.googleRevenue)}</span>
+                                  </div>
+                                  <div className="flex justify-between text-[13px]">
+                                    <span className="text-rose-600/70">Inv.</span>
+                                    <span className="font-semibold text-rose-900">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(week.metrics.invGoogle)}</span>
+                                  </div>
+                                  <div className="flex justify-between text-[13px]">
+                                    <span className="text-rose-600/70">Compras</span>
+                                    <span className="font-semibold text-rose-900">{week.metrics.googlePurchases}</span>
+                                  </div>
+                                  <div className="flex justify-between text-[13px] pt-1 border-t border-rose-100">
+                                    <span className="font-medium text-rose-800">ROI</span>
+                                    <span className="font-bold text-rose-700">{week.metrics.googleRoi.toFixed(2)}x</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </div>
-                        <div className="space-y-3">
-                          <div className="flex justify-between items-center text-sm">
-                            <span className="text-neutral-500">Faturamento</span>
-                            <div className="flex items-center gap-2">
-                              <VariationBadge current={week.metrics.revenue} previous={week.prevMetrics.revenue} />
-                              <span className="font-semibold text-neutral-900">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(week.metrics.revenue)}</span>
-                            </div>
-                          </div>
-                          <div className="flex justify-between items-center text-sm">
-                            <span className="text-neutral-500">Investimento</span>
-                            <div className="flex items-center gap-2">
-                              <VariationBadge current={week.metrics.totalInv} previous={week.prevMetrics.totalInv} neutral />
-                              <span className="font-semibold text-indigo-700">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(week.metrics.totalInv)}</span>
-                            </div>
-                          </div>
-                          <div className="flex justify-between items-center text-sm">
-                            <span className="text-neutral-500">Compras</span>
-                            <div className="flex items-center gap-2">
-                              <VariationBadge current={week.metrics.purchases} previous={week.prevMetrics.purchases} />
-                              <span className="font-semibold text-blue-700">{week.metrics.purchases}</span>
-                            </div>
-                          </div>
-                          <div className="flex justify-between items-center text-sm pt-2 border-t border-neutral-200/60">
-                            <span className="font-medium text-neutral-600">ROI da Semana</span>
-                            <div className="flex items-center gap-2">
-                              <VariationBadge current={week.metrics.roi} previous={week.prevMetrics.roi} />
-                              <span className={`font-bold ${week.metrics.roi >= 2 ? 'text-emerald-600' : week.metrics.roi >= 1 ? 'text-amber-600' : 'text-red-600'}`}>
-                                {week.metrics.roi.toFixed(2)}x
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 </div>
               )}
