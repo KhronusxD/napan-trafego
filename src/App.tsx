@@ -833,59 +833,6 @@ export default function App() {
     }
   };
 
-  if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen bg-neutral-900 flex items-center justify-center p-4 font-sans">
-        <div className="max-w-md w-full bg-white rounded-2xl shadow-xl overflow-hidden">
-          <div className="p-8">
-            <div className="w-12 h-12 bg-indigo-600 rounded-xl flex items-center justify-center mb-6">
-              <BarChart3 className="w-6 h-6 text-white" />
-            </div>
-            <h2 className="text-2xl font-bold text-neutral-900 mb-2">Login NAPAN</h2>
-            <p className="text-neutral-500 mb-8">Faça login para acessar o Traffic Hub</p>
-
-            <form onSubmit={handleLogin} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-1">E-mail</label>
-                <input
-                  type="email"
-                  value={loginEmail}
-                  onChange={(e) => setLoginEmail(e.target.value)}
-                  className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-colors"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-1">Senha</label>
-                <input
-                  type="password"
-                  value={loginPassword}
-                  onChange={(e) => setLoginPassword(e.target.value)}
-                  className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-colors"
-                  required
-                />
-              </div>
-
-              {loginError && (
-                <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-100">
-                  {loginError}
-                </div>
-              )}
-
-              <button
-                type="submit"
-                disabled={isLoggingIn}
-                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 rounded-lg transition-colors flex justify-center items-center gap-2"
-              >
-                {isLoggingIn ? "Acessando..." : "Entrar"}
-              </button>
-            </form>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   const monthlyMetrics = useMemo(() => {
     if (activeTab !== "monthly") return null;
 
@@ -977,6 +924,60 @@ export default function App() {
 
     return { month: monthMetrics, weeks: weeksMetrics };
   }, [activeTab, monthlyTabMonth, sheetData, trafficData, googleAdsData]);
+
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-neutral-900 flex items-center justify-center p-4 font-sans">
+        <div className="max-w-md w-full bg-white rounded-2xl shadow-xl overflow-hidden">
+          <div className="p-8">
+            <div className="w-12 h-12 bg-indigo-600 rounded-xl flex items-center justify-center mb-6">
+              <BarChart3 className="w-6 h-6 text-white" />
+            </div>
+            <h2 className="text-2xl font-bold text-neutral-900 mb-2">Login NAPAN</h2>
+            <p className="text-neutral-500 mb-8">Faça login para acessar o Traffic Hub</p>
+
+            <form onSubmit={handleLogin} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-neutral-700 mb-1">E-mail</label>
+                <input
+                  type="email"
+                  value={loginEmail}
+                  onChange={(e) => setLoginEmail(e.target.value)}
+                  className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-colors"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-neutral-700 mb-1">Senha</label>
+                <input
+                  type="password"
+                  value={loginPassword}
+                  onChange={(e) => setLoginPassword(e.target.value)}
+                  className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-colors"
+                  required
+                />
+              </div>
+
+              {loginError && (
+                <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-100">
+                  {loginError}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={isLoggingIn}
+                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 rounded-lg transition-colors flex justify-center items-center gap-2"
+              >
+                {isLoggingIn ? "Acessando..." : "Entrar"}
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
 
   return (
     <div className="min-h-screen bg-neutral-50 font-sans text-neutral-900">
