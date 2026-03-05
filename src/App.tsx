@@ -1074,8 +1074,9 @@ export default function App() {
     const baseCpc = clicks > 0 ? inv / clicks : 0;
     const baseCpa = purchases > 0 ? inv / purchases : 0;
     const baseConvRate = clicks > 0 ? (purchases / clicks) * 100 : 0;
+    const roi = inv > 0 ? revenue / inv : 0;
 
-    return { revenue, purchases, inv, clicks, baseTicket, baseCpc, baseCpa, baseConvRate };
+    return { revenue, purchases, inv, clicks, baseTicket, baseCpc, baseCpa, baseConvRate, roi };
   }, [activeTab, simulationTabMonth, sheetData, trafficData, googleAdsData]);
 
   // Derived Simulation Metrics
