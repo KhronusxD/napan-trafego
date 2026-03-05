@@ -1033,6 +1033,7 @@ export default function App() {
     };
 
     let revenue = 0, purchases = 0, inv = 0, clicks = 0;
+    let views = 0, carts = 0, checkouts = 0;
 
     sheetData.forEach(row => {
       const d = parseDate(row["Data"]);
@@ -1057,6 +1058,18 @@ export default function App() {
         const cStr = row["Cliques no Link"] || row["Cliques"] || "0";
         const cNum = parseInt(cStr.replace(/\./g, ''), 10);
         if (!isNaN(cNum)) clicks += cNum;
+
+        const vStr = row["Visualizações de página de destino"] || row["Visualizações de Página"] || "0";
+        const vNum = parseInt(vStr.replace(/\./g, ''), 10);
+        if (!isNaN(vNum)) views += vNum;
+
+        const cartStr = row["Adições ao carrinho"] || row["Adições ao Carrinho"] || "0";
+        const cartNum = parseInt(cartStr.replace(/\./g, ''), 10);
+        if (!isNaN(cartNum)) carts += cartNum;
+
+        const chkStr = row["Finalizações de compra iniciadas"] || row["Checkout"] || "0";
+        const chkNum = parseInt(chkStr.replace(/\./g, ''), 10);
+        if (!isNaN(chkNum)) checkouts += chkNum;
       }
     });
 
@@ -1070,16 +1083,39 @@ export default function App() {
         const cStr = row["Cliques no Link"] || row["Cliques"] || "0";
         const cNum = parseFloat(cStr.replace(/\./g, '').replace(',', '.'));
         if (!isNaN(cNum)) clicks += cNum;
+
+        const vStr = row["Visualizações de página de destino"] || row["Visualizações de Página"] || "0";
+        const vNum = parseFloat(vStr.replace(/\./g, '').replace(',', '.'));
+        if (!isNaN(vNum)) views += vNum;
+
+        const cartStr = row["Adições ao carrinho"] || row["Adições ao Carrinho"] || "0";
+        const cartNum = parseFloat(cartStr.replace(/\./g, '').replace(',', '.'));
+        if (!isNaN(cartNum)) carts += cartNum;
+
+        const chkStr = row["Finalizações de compra iniciadas"] || row["Checkout"] || "0";
+        const chkNum = parseFloat(chkStr.replace(/\./g, '').replace(',', '.'));
+        if (!isNaN(chkNum)) checkouts += chkNum;
       }
     });
 
     const baseTicket = purchases > 0 ? revenue / purchases : 0;
     const baseCpc = clicks > 0 ? inv / clicks : 0;
     const baseCpa = purchases > 0 ? inv / purchases : 0;
+
+    // Funnel Conversions
+    const baseViewRate = clicks > 0 ? (views / clicks) * 100 : 0;
+    const baseCartRate = views > 0 ? (carts / views) * 100 : 0;
+    const baseCheckoutRate = carts > 0 ? (checkouts / carts) * 100 : 0;
+    const basePurcRate = checkouts > 0 ? (purchases / checkouts) * 100 : 0;
+
     const baseConvRate = clicks > 0 ? (purchases / clicks) * 100 : 0;
     const roi = inv > 0 ? revenue / inv : 0;
 
-    return { revenue, purchases, inv, clicks, baseTicket, baseCpc, baseCpa, baseConvRate, roi };
+    return {
+      revenue, purchases, inv, clicks, views, carts, checkouts,
+      baseTicket, baseCpc, baseCpa, baseConvRate, roi,
+      baseViewRate, baseCartRate, baseCheckoutRate, basePurcRate
+    };
   }, [activeTab, simulationTabMonth, sheetData, trafficData, googleAdsData]);
 
   // Derived Simulation Metrics (Full Funnel)
@@ -2243,16 +2279,10 @@ export default function App() {
                       if (simBaseMetrics) {
                         if (simBaseMetrics.baseTicket > 0) setSimTicket(simBaseMetrics.baseTicket);
                         if (simBaseMetrics.baseCpc > 0) setSimCpc(simBaseMetrics.baseCpc);
-                        if (simBaseMetrics.baseConvRate > 0) {
-                          // Approximating funnel based on final global conversion rate for the baseline fetch
-                          setSimViewRate(70);
-                          setSimCartRate(15);
-                          setSimCheckoutRate(40);
-                          // Backsolve purchase rate from the real global conv rate
-                          const globalWithoutPurc = (70 / 100) * (15 / 100) * (40 / 100);
-                          const resolvedPurcRate = globalWithoutPurc > 0 ? (simBaseMetrics.baseConvRate / 100) / globalWithoutPurc : 0;
-                          setSimPurcRate(Math.min(resolvedPurcRate * 100, 100));
-                        }
+                        if (simBaseMetrics.baseViewRate > 0) setSimViewRate(Math.min(simBaseMetrics.baseViewRate, 100));
+                        if (simBaseMetrics.baseCartRate > 0) setSimCartRate(Math.min(simBaseMetrics.baseCartRate, 100));
+                        if (simBaseMetrics.baseCheckoutRate > 0) setSimCheckoutRate(Math.min(simBaseMetrics.baseCheckoutRate, 100));
+                        if (simBaseMetrics.basePurcRate > 0) setSimPurcRate(Math.min(simBaseMetrics.basePurcRate, 100));
                         if (simBaseMetrics.inv > 0) setSimInvestment(simBaseMetrics.inv);
                       }
                     }}
