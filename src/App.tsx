@@ -107,7 +107,10 @@ export default function App() {
   });
   const [simInvestment, setSimInvestment] = useState(5000);
   const [simCpc, setSimCpc] = useState(0.85); // 85 centavos default
-  const [simConvRate, setSimConvRate] = useState(1.5); // 1.5% default
+  const [simViewRate, setSimViewRate] = useState(70);   // 70% Views/Clicks default
+  const [simCartRate, setSimCartRate] = useState(15);   // 15% Carts/Views default
+  const [simCheckoutRate, setSimCheckoutRate] = useState(40); // 40% ICs/Carts default
+  const [simPurcRate, setSimPurcRate] = useState(30);   // 30% Purcs/ICs default
   const [simTicket, setSimTicket] = useState(120); // R$120 default
 
   // Strategy Edit State
@@ -1079,9 +1082,13 @@ export default function App() {
     return { revenue, purchases, inv, clicks, baseTicket, baseCpc, baseCpa, baseConvRate, roi };
   }, [activeTab, simulationTabMonth, sheetData, trafficData, googleAdsData]);
 
-  // Derived Simulation Metrics
+  // Derived Simulation Metrics (Full Funnel)
   const simulatedClicks = simCpc > 0 ? simInvestment / simCpc : 0;
-  const simulatedPurchases = simulatedClicks * (simConvRate / 100);
+  const simulatedViews = simulatedClicks * (simViewRate / 100);
+  const simulatedCarts = simulatedViews * (simCartRate / 100);
+  const simulatedCheckouts = simulatedCarts * (simCheckoutRate / 100);
+  const simulatedPurchases = simulatedCheckouts * (simPurcRate / 100);
+
   const simulatedCpa = simulatedPurchases > 0 ? simInvestment / simulatedPurchases : 0;
   const simulatedRevenue = simulatedPurchases * simTicket;
   const simulatedRoi = simInvestment > 0 ? simulatedRevenue / simInvestment : 0;
@@ -2236,7 +2243,16 @@ export default function App() {
                       if (simBaseMetrics) {
                         if (simBaseMetrics.baseTicket > 0) setSimTicket(simBaseMetrics.baseTicket);
                         if (simBaseMetrics.baseCpc > 0) setSimCpc(simBaseMetrics.baseCpc);
-                        if (simBaseMetrics.baseConvRate > 0) setSimConvRate(simBaseMetrics.baseConvRate);
+                        if (simBaseMetrics.baseConvRate > 0) {
+                          // Approximating funnel based on final global conversion rate for the baseline fetch
+                          setSimViewRate(70);
+                          setSimCartRate(15);
+                          setSimCheckoutRate(40);
+                          // Backsolve purchase rate from the real global conv rate
+                          const globalWithoutPurc = (70 / 100) * (15 / 100) * (40 / 100);
+                          const resolvedPurcRate = globalWithoutPurc > 0 ? (simBaseMetrics.baseConvRate / 100) / globalWithoutPurc : 0;
+                          setSimPurcRate(Math.min(resolvedPurcRate * 100, 100));
+                        }
                         if (simBaseMetrics.inv > 0) setSimInvestment(simBaseMetrics.inv);
                       }
                     }}
@@ -2274,12 +2290,36 @@ export default function App() {
                         <input type="range" min="0.05" max="10" step="0.05" value={simCpc} onChange={(e) => setSimCpc(Number(e.target.value))} className="w-full transition-all accent-blue-600" />
                       </div>
 
+                      <div className="space-y-3 pt-2">
+                        <div className="flex justify-between items-center">
+                          <label className="text-sm font-medium text-neutral-700">Taxa de Carregamento (Link {'->'} Site)</label>
+                          <span className="text-sm font-bold text-neutral-600 bg-neutral-100 px-2.5 py-1 rounded-md">{simViewRate.toFixed(1)}%</span>
+                        </div>
+                        <input type="range" min="10" max="100" step="1" value={simViewRate} onChange={(e) => setSimViewRate(Number(e.target.value))} className="w-full transition-all accent-neutral-600" />
+                      </div>
+
                       <div className="space-y-3">
                         <div className="flex justify-between items-center">
-                          <label className="text-sm font-medium text-neutral-700">Taxa de Conversão da Loja</label>
-                          <span className="text-sm font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-md">{simConvRate.toFixed(2)}%</span>
+                          <label className="text-sm font-medium text-neutral-700">Taxa de Adição ao Carrinho</label>
+                          <span className="text-sm font-bold text-neutral-600 bg-neutral-100 px-2.5 py-1 rounded-md">{simCartRate.toFixed(1)}%</span>
                         </div>
-                        <input type="range" min="0.1" max="10" step="0.1" value={simConvRate} onChange={(e) => setSimConvRate(Number(e.target.value))} className="w-full transition-all accent-emerald-600" />
+                        <input type="range" min="1" max="100" step="1" value={simCartRate} onChange={(e) => setSimCartRate(Number(e.target.value))} className="w-full transition-all accent-neutral-600" />
+                      </div>
+
+                      <div className="space-y-3">
+                        <div className="flex justify-between items-center">
+                          <label className="text-sm font-medium text-neutral-700">Taxa de Início de Checkout</label>
+                          <span className="text-sm font-bold text-neutral-600 bg-neutral-100 px-2.5 py-1 rounded-md">{simCheckoutRate.toFixed(1)}%</span>
+                        </div>
+                        <input type="range" min="1" max="100" step="1" value={simCheckoutRate} onChange={(e) => setSimCheckoutRate(Number(e.target.value))} className="w-full transition-all accent-neutral-600" />
+                      </div>
+
+                      <div className="space-y-3 border-b border-neutral-100 pb-4">
+                        <div className="flex justify-between items-center">
+                          <label className="text-sm font-medium text-neutral-700">Taxa de Conversão Final (Compra)</label>
+                          <span className="text-sm font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-md">{simPurcRate.toFixed(1)}%</span>
+                        </div>
+                        <input type="range" min="1" max="100" step="1" value={simPurcRate} onChange={(e) => setSimPurcRate(Number(e.target.value))} className="w-full transition-all accent-emerald-600" />
                       </div>
 
                       <div className="space-y-3">
@@ -2291,14 +2331,31 @@ export default function App() {
                       </div>
                     </div>
 
-                    <div className="mt-2 bg-neutral-50 rounded-xl p-4 border border-neutral-100 flex flex-col gap-2">
+                    <div className="mt-2 bg-neutral-800 text-white shadow-inner rounded-xl p-5 border border-neutral-700 flex flex-col gap-3">
+                      <h4 className="text-xs text-neutral-400 font-bold uppercase tracking-wider mb-1">Volumes Esperados na Cascata</h4>
                       <div className="flex justify-between text-sm">
-                        <span className="text-neutral-500">Cliques Projetados:</span>
-                        <span className="font-semibold text-neutral-800">{Math.round(simulatedClicks).toLocaleString('pt-BR')}</span>
+                        <span className="text-neutral-300">Cliques no Link:</span>
+                        <span className="font-semibold text-white">{Math.round(simulatedClicks).toLocaleString('pt-BR')}</span>
                       </div>
                       <div className="flex justify-between text-sm">
-                        <span className="text-neutral-500">CPA Esperado:</span>
-                        <span className="font-semibold text-neutral-800">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(simulatedCpa)}</span>
+                        <span className="text-neutral-300">Views de Página:</span>
+                        <span className="font-semibold text-white">{Math.round(simulatedViews).toLocaleString('pt-BR')}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-neutral-300">Carrinhos (AddToCart):</span>
+                        <span className="font-semibold text-white">{Math.round(simulatedCarts).toLocaleString('pt-BR')}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-neutral-300">Checkouts Iniciados:</span>
+                        <span className="font-semibold text-white">{Math.round(simulatedCheckouts).toLocaleString('pt-BR')}</span>
+                      </div>
+                      <div className="flex justify-between text-sm pt-2 border-t border-neutral-600">
+                        <span className="text-neutral-300">Compras Fechadas:</span>
+                        <span className="font-bold text-emerald-400">{Math.round(simulatedPurchases).toLocaleString('pt-BR')}</span>
+                      </div>
+                      <div className="flex justify-between text-sm mt-1">
+                        <span className="text-neutral-300">CPA (Custo por Compra):</span>
+                        <span className="font-bold text-emerald-400">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(simulatedCpa)}</span>
                       </div>
                     </div>
                   </div>
@@ -2307,9 +2364,11 @@ export default function App() {
                 {/* Futuro Visual Column */}
                 <div className="lg:col-span-8 space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 p-6 rounded-2xl shadow-md text-white flex flex-col">
-                      <span className="text-indigo-100 text-sm font-medium mb-1">Faturamento Presumido</span>
-                      <span className="text-3xl font-black tracking-tight">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(simulatedRevenue)}</span>
+                    <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 p-6 rounded-2xl shadow-md text-white flex flex-col min-w-0">
+                      <span className="text-indigo-100 text-sm font-medium mb-1 truncate" title="Faturamento Presumido">Faturamento Presumido</span>
+                      <span className="text-2xl 2xl:text-3xl font-black tracking-tight truncate block w-full" title={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(simulatedRevenue)}>
+                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(simulatedRevenue)}
+                      </span>
                     </div>
                     <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 p-6 rounded-2xl shadow-md text-white flex flex-col">
                       <span className="text-emerald-100 text-sm font-medium mb-1">Vendas Concluídas</span>
