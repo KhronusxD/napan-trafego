@@ -1,6 +1,6 @@
 export const companies = [
   { id: "atual-card", name: "Atual Card" },
-  { id: "fabrica-do-livro", name: "Fábrica do Livro" },
+  { id: "fabrica-do-livro", name: "Fábrica do Livro", sheetGid: "1616676463", trafficGid: "1328007383", googleAdsGid: "512858276" },
   { id: "grafica-cores", name: "Gráfica Cores" },
   { id: "cartoes-mais-barato", name: "Cartões Mais Barato" },
   { id: "paulista-cartoes", name: "Paulista Cartões" },

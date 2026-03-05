@@ -196,9 +196,14 @@ export default function App() {
 
     const currentCompanyObj = companies.find((c) => c.id === selectedCompany);
     const tabName = currentCompanyObj?.name || "";
+    const hasSheetGid = "sheetGid" in (currentCompanyObj || {});
+    const hasTrafficGid = "trafficGid" in (currentCompanyObj || {});
+    const hasGoogleAdsGid = "googleAdsGid" in (currentCompanyObj || {});
 
     // Fetch Revenue Sheet
-    const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tabName)}`;
+    const url = hasSheetGid
+      ? `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&gid=${(currentCompanyObj as any).sheetGid}`
+      : `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tabName)}`;
 
     Papa.parse(url, {
       download: true,
@@ -224,7 +229,9 @@ export default function App() {
     });
 
     // Fetch Traffic Sheet
-    const trafficUrl = `https://docs.google.com/spreadsheets/d/${TRAFFIC_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tabName)}`;
+    const trafficUrl = hasTrafficGid
+      ? `https://docs.google.com/spreadsheets/d/${TRAFFIC_SHEET_ID}/gviz/tq?tqx=out:csv&gid=${(currentCompanyObj as any).trafficGid}`
+      : `https://docs.google.com/spreadsheets/d/${TRAFFIC_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tabName)}`;
 
     Papa.parse(trafficUrl, {
       download: true,
@@ -250,7 +257,9 @@ export default function App() {
 
     // Fetch Google Ads Sheet
     const googleAdsTabName = `${tabName} - Google Ads`;
-    const googleAdsUrl = `https://docs.google.com/spreadsheets/d/${TRAFFIC_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(googleAdsTabName)}`;
+    const googleAdsUrl = hasGoogleAdsGid
+      ? `https://docs.google.com/spreadsheets/d/${TRAFFIC_SHEET_ID}/gviz/tq?tqx=out:csv&gid=${(currentCompanyObj as any).googleAdsGid}`
+      : `https://docs.google.com/spreadsheets/d/${TRAFFIC_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(googleAdsTabName)}`;
 
     Papa.parse(googleAdsUrl, {
       download: true,
