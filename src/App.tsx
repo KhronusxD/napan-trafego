@@ -24,14 +24,25 @@ import {
   Save,
   Plus,
   X,
-  MousePointerClick,
-  CreditCard,
-  RefreshCw,
   Activity,
-  CheckCircle2,
+  FileSpreadsheet,
   AlertCircle,
-  Info,
+  RefreshCw,
+  HandCoins,
+  ExternalLink,
+  MousePointerClick,
+  Percent,
   Settings,
+  HelpCircle,
+  Download,
+  PieChart,
+  LineChart,
+  Zap,
+  History,
+  ChevronRight,
+  CreditCard,
+  CheckCircle2,
+  Info,
   ArrowUpRight,
   ArrowDownRight,
   Minus
@@ -1035,6 +1046,10 @@ export default function App() {
     let revenue = 0, purchases = 0, inv = 0, clicks = 0;
     let views = 0, carts = 0, checkouts = 0;
 
+    let metaRevenue = 0, metaInv = 0, metaClicks = 0;
+    let metaViews = 0, metaCarts = 0, metaCheckouts = 0;
+    let metaPurchases = 0;
+
     sheetData.forEach(row => {
       const d = parseDate(row["Data"]);
       if (isDateInRangeLocal(d)) {
@@ -1057,19 +1072,43 @@ export default function App() {
 
         const cStr = row["Cliques no Link"] || row["Cliques"] || "0";
         const cNum = parseInt(cStr.replace(/\./g, ''), 10);
-        if (!isNaN(cNum)) clicks += cNum;
+        if (!isNaN(cNum)) {
+          clicks += cNum;
+          metaClicks += cNum;
+        }
 
         const vStr = row["Visualizações de página de destino"] || row["Visualizações de Página"] || "0";
         const vNum = parseInt(vStr.replace(/\./g, ''), 10);
-        if (!isNaN(vNum)) views += vNum;
+        if (!isNaN(vNum)) {
+          views += vNum;
+          metaViews += vNum;
+        }
 
         const cartStr = row["Adições ao carrinho"] || row["Adições ao Carrinho"] || "0";
         const cartNum = parseInt(cartStr.replace(/\./g, ''), 10);
-        if (!isNaN(cartNum)) carts += cartNum;
+        if (!isNaN(cartNum)) {
+          carts += cartNum;
+          metaCarts += cartNum;
+        }
 
         const chkStr = row["Finalizações de compra iniciadas"] || row["Checkout"] || "0";
         const chkNum = parseInt(chkStr.replace(/\./g, ''), 10);
-        if (!isNaN(chkNum)) checkouts += chkNum;
+        if (!isNaN(chkNum)) {
+          checkouts += chkNum;
+          metaCheckouts += chkNum;
+        }
+
+        const purcStr = row["Compras de no site"] || row["Compras"] || "0";
+        const purcNum = parseInt(purcStr.replace(/\./g, ''), 10);
+        if (!isNaN(purcNum)) {
+          metaPurchases += purcNum;
+        }
+
+        const revStr = row["Valor de conversão de compras no site"] || row["Faturamento"] || "0";
+        const rev = parseFloat(revStr.replace(/\./g, '').replace(',', '.'));
+        if (!isNaN(rev)) {
+          metaRevenue += rev;
+        }
       }
     });
 
@@ -1102,11 +1141,19 @@ export default function App() {
     const baseCpc = clicks > 0 ? inv / clicks : 0;
     const baseCpa = purchases > 0 ? inv / purchases : 0;
 
+    const baseMetaTicket = metaPurchases > 0 ? metaRevenue / metaPurchases : 150;
+    const baseMetaCpc = metaClicks > 0 ? metaInv / metaClicks : 2.5;
+
     // Funnel Conversions
     const baseViewRate = clicks > 0 ? (views / clicks) * 100 : 0;
     const baseCartRate = views > 0 ? (carts / views) * 100 : 0;
     const baseCheckoutRate = carts > 0 ? (checkouts / carts) * 100 : 0;
     const basePurcRate = checkouts > 0 ? (purchases / checkouts) * 100 : 0;
+
+    const baseMetaViewRate = metaClicks > 0 ? (metaViews / metaClicks) * 100 : 80;
+    const baseMetaCartRate = metaViews > 0 ? (metaCarts / metaViews) * 100 : 50;
+    const baseMetaCheckoutRate = metaCarts > 0 ? (metaCheckouts / metaCarts) * 100 : 40;
+    const baseMetaPurcRate = metaCheckouts > 0 ? (metaPurchases / metaCheckouts) * 100 : 30;
 
     const baseConvRate = clicks > 0 ? (purchases / clicks) * 100 : 0;
     const roi = inv > 0 ? revenue / inv : 0;
@@ -1114,7 +1161,9 @@ export default function App() {
     return {
       revenue, purchases, inv, clicks, views, carts, checkouts,
       baseTicket, baseCpc, baseCpa, baseConvRate, roi,
-      baseViewRate, baseCartRate, baseCheckoutRate, basePurcRate
+      baseViewRate, baseCartRate, baseCheckoutRate, basePurcRate,
+      metaRevenue, metaInv, metaClicks, metaViews, metaCarts, metaCheckouts, metaPurchases,
+      baseMetaTicket, baseMetaCpc, baseMetaViewRate, baseMetaCartRate, baseMetaCheckoutRate, baseMetaPurcRate
     };
   }, [activeTab, simulationTabMonth, sheetData, trafficData, googleAdsData]);
 
@@ -1128,6 +1177,10 @@ export default function App() {
   const simulatedCpa = simulatedPurchases > 0 ? simInvestment / simulatedPurchases : 0;
   const simulatedRevenue = simulatedPurchases * simTicket;
   const simulatedRoi = simInvestment > 0 ? simulatedRevenue / simInvestment : 0;
+
+  // Global Presumed Revenue: (Total Base - Meta Base) + Simulated Meta Revenue
+  const simulatedGlobalRevenue = simBaseMetrics ?
+    ((simBaseMetrics.revenue - (simBaseMetrics.metaRevenue || 0)) + simulatedRevenue) : 0;
 
   if (!isAuthenticated) {
     return (
@@ -2277,17 +2330,19 @@ export default function App() {
                   <button
                     onClick={() => {
                       if (simBaseMetrics) {
-                        if (simBaseMetrics.baseTicket > 0) setSimTicket(simBaseMetrics.baseTicket);
-                        if (simBaseMetrics.baseCpc > 0) setSimCpc(simBaseMetrics.baseCpc);
-                        if (simBaseMetrics.baseViewRate > 0) setSimViewRate(Math.min(simBaseMetrics.baseViewRate, 100));
-                        if (simBaseMetrics.baseCartRate > 0) setSimCartRate(Math.min(simBaseMetrics.baseCartRate, 100));
-                        if (simBaseMetrics.baseCheckoutRate > 0) setSimCheckoutRate(Math.min(simBaseMetrics.baseCheckoutRate, 100));
-                        if (simBaseMetrics.basePurcRate > 0) setSimPurcRate(Math.min(simBaseMetrics.basePurcRate, 100));
-                        if (simBaseMetrics.inv > 0) setSimInvestment(simBaseMetrics.inv);
+                        setSimInvestment(simBaseMetrics.metaInv || 0);
+                        setSimTicket(simBaseMetrics.baseMetaTicket || 0);
+                        setSimCpc(simBaseMetrics.baseMetaCpc || 0);
+                        setSimViewRate(simBaseMetrics.baseMetaViewRate || 0);
+                        setSimCartRate(simBaseMetrics.baseMetaCartRate || 0);
+                        setSimCheckoutRate(simBaseMetrics.baseMetaCheckoutRate || 0);
+                        setSimPurcRate(simBaseMetrics.baseMetaPurcRate || 0);
                       }
                     }}
-                    className="bg-amber-100 text-amber-800 px-3 py-1.5 rounded-lg text-sm font-bold hover:bg-amber-200 transition-colors shadow-sm"
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-lg text-sm font-medium transition-colors border border-indigo-200"
+                    title="Puxar dados do mês base (Apenas Meta Ads)"
                   >
+                    <Download className="w-4 h-4" />
                     Puxar Base
                   </button>
                 </div>
@@ -2424,9 +2479,9 @@ export default function App() {
                     <div className="h-64 flex items-end justify-center gap-12 mt-4 px-4 relative z-10 w-full mx-auto max-w-2xl border-b-2 border-dashed border-neutral-200 pb-2">
                       {/* Context: Find the max bar value for height scaling */}
                       {(() => {
-                        const maxRev = Math.max((simBaseMetrics?.revenue || 0), simulatedRevenue, 1);
+                        const maxRev = Math.max((simBaseMetrics?.revenue || 0), simulatedGlobalRevenue, 1);
                         const revBaseHeight = simBaseMetrics ? (simBaseMetrics.revenue / maxRev) * 100 : 0;
-                        const revSimHeight = (simulatedRevenue / maxRev) * 100;
+                        const revSimHeight = (simulatedGlobalRevenue / maxRev) * 100;
 
                         const maxRoi = Math.max((simBaseMetrics?.roi || 0), simulatedRoi, 1);
                         const roiBaseHeight = simBaseMetrics ? (simBaseMetrics.roi / maxRoi) * 100 : 0;
@@ -2441,7 +2496,7 @@ export default function App() {
                                   <span className="absolute -top-6 left-1/2 -translate-x-1/2 text-[10px] font-bold text-neutral-400 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">{simBaseMetrics ? new Intl.NumberFormat('pt-BR', { notation: 'compact' }).format(simBaseMetrics.revenue) : '0'}</span>
                                 </div>
                                 <div className="w-1/2 bg-indigo-500 rounded-t-md relative transition-all duration-700 ease-out shadow-lg flex flex-col justify-end" style={{ height: `${revSimHeight}%` }}>
-                                  <span className="absolute -top-6 left-1/2 -translate-x-1/2 text-[10px] font-bold text-indigo-600 whitespace-nowrap">{new Intl.NumberFormat('pt-BR', { notation: 'compact' }).format(simulatedRevenue)}</span>
+                                  <span className="absolute -top-6 left-1/2 -translate-x-1/2 text-[10px] font-bold text-indigo-600 whitespace-nowrap">{new Intl.NumberFormat('pt-BR', { notation: 'compact' }).format(simulatedGlobalRevenue)}</span>
                                 </div>
                               </div>
                               <span className="text-xs font-semibold text-neutral-500">Faturamento</span>
