@@ -92,6 +92,7 @@ export default function App() {
   const [loginError, setLoginError] = useState("");
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
+  const [allowedCompanyIds, setAllowedCompanyIds] = useState<string[]>([]);
   const [selectedCompany, setSelectedCompany] = useState(companies[0].id);
   const [activeTab, setActiveTab] = useState("overview");
   const [dateRange, setDateRange] = useState("Últimos 30 dias");
@@ -219,18 +220,52 @@ export default function App() {
         setAccountHealth(defaultAccountHealth);
       }
     };
-    if (isAuthenticated) {
+    if (isAuthenticated && (allowedCompanyIds.length === 0 || allowedCompanyIds.includes(selectedCompany))) {
       fetchData();
     }
     setIsEditingStrategy(false);
-  }, [selectedCompany, isAuthenticated]);
+  }, [selectedCompany, isAuthenticated, allowedCompanyIds]);
 
   // Check Supabase Auth Session on mount
   useEffect(() => {
+    const loadUserAccess = async (email: string) => {
+      try {
+        const { data, error } = await supabase
+          .from('user_access')
+          .select('company_id')
+          .eq('user_email', email);
+
+        if (error || !data) {
+          console.error("Erro ao buscar acesso do usuário:", error);
+          setAllowedCompanyIds([]);
+          return;
+        }
+
+        const ids = data.map((d: any) => d.company_id);
+        if (ids.includes('ALL')) {
+          setAllowedCompanyIds(companies.map(c => c.id));
+        } else {
+          setAllowedCompanyIds(ids);
+          setSelectedCompany(prev => {
+            if (ids.length > 0 && !ids.includes(prev)) {
+              return ids[0];
+            }
+            return prev;
+          });
+        }
+      } catch (err) {
+        console.error("Erro inesperado ao buscar acesso:", err);
+        setAllowedCompanyIds([]);
+      }
+    };
+
     const checkSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
         setIsAuthenticated(true);
+        if (session.user?.email) {
+          loadUserAccess(session.user.email);
+        }
       }
     };
 
@@ -239,12 +274,19 @@ export default function App() {
     // Listen to auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setIsAuthenticated(!!session);
+      if (session?.user?.email) {
+        loadUserAccess(session.user.email);
+      } else {
+        setAllowedCompanyIds([]);
+      }
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
   useEffect(() => {
+    if (isAuthenticated && allowedCompanyIds.length > 0 && !allowedCompanyIds.includes(selectedCompany)) return;
+
     setIsFetchingSheet(true);
     setSheetError(null);
     setIsFetchingTraffic(true);
@@ -341,7 +383,7 @@ export default function App() {
       }
     });
 
-  }, [selectedCompany, refreshTrigger]);
+  }, [selectedCompany, refreshTrigger, isAuthenticated, allowedCompanyIds]);
 
   const [isSavingStrategy, setIsSavingStrategy] = useState(false);
 
@@ -1257,9 +1299,10 @@ export default function App() {
             <select
               value={selectedCompany}
               onChange={(e) => setSelectedCompany(e.target.value)}
-              className="appearance-none bg-neutral-100 border border-neutral-200 text-neutral-800 py-2 pl-4 pr-10 rounded-lg font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent cursor-pointer"
+              disabled={allowedCompanyIds.length <= 1 && allowedCompanyIds.length !== 0}
+              className={`appearance-none bg-neutral-100 border border-neutral-200 text-neutral-800 py-2 pl-4 pr-10 rounded-lg font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent ${allowedCompanyIds.length <= 1 && allowedCompanyIds.length !== 0 ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer'}`}
             >
-              {companies.map((company) => (
+              {companies.filter(c => allowedCompanyIds.length === 0 || allowedCompanyIds.includes(c.id)).map((company) => (
                 <option key={company.id} value={company.id}>
                   {company.name}
                 </option>
