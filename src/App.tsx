@@ -587,7 +587,6 @@ export default function App() {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // Normalize rowDate to midnight for accurate comparison
     const normalizedRowDate = new Date(rowDate);
     normalizedRowDate.setHours(0, 0, 0, 0);
 
@@ -599,20 +598,48 @@ export default function App() {
       yesterday.setDate(today.getDate() - 1);
       return normalizedRowDate.getTime() === yesterday.getTime();
     }
+    if (dateRange === "Hoje e ontem") {
+      const yesterday = new Date(today);
+      yesterday.setDate(today.getDate() - 1);
+      return normalizedRowDate >= yesterday && normalizedRowDate <= today;
+    }
     if (dateRange === "Últimos 7 dias") {
       const sevenDaysAgo = new Date(today);
-      sevenDaysAgo.setDate(today.getDate() - 7);
+      sevenDaysAgo.setDate(today.getDate() - 6);
       return normalizedRowDate >= sevenDaysAgo && normalizedRowDate <= today;
     }
-    if (dateRange === "Últimos 15 dias") {
-      const fifteenDaysAgo = new Date(today);
-      fifteenDaysAgo.setDate(today.getDate() - 15);
-      return normalizedRowDate >= fifteenDaysAgo && normalizedRowDate <= today;
+    if (dateRange === "Últimos 14 dias") {
+      const fourteenDaysAgo = new Date(today);
+      fourteenDaysAgo.setDate(today.getDate() - 13);
+      return normalizedRowDate >= fourteenDaysAgo && normalizedRowDate <= today;
+    }
+    if (dateRange === "Últimos 28 dias") {
+      const twentyEightDaysAgo = new Date(today);
+      twentyEightDaysAgo.setDate(today.getDate() - 27);
+      return normalizedRowDate >= twentyEightDaysAgo && normalizedRowDate <= today;
     }
     if (dateRange === "Últimos 30 dias") {
       const thirtyDaysAgo = new Date(today);
-      thirtyDaysAgo.setDate(today.getDate() - 30);
+      thirtyDaysAgo.setDate(today.getDate() - 29);
       return normalizedRowDate >= thirtyDaysAgo && normalizedRowDate <= today;
+    }
+    if (dateRange === "Esta semana") {
+      const firstDayOfWeek = new Date(today);
+      const day = today.getDay();
+      const diff = today.getDate() - day + (day === 0 ? -6 : 1); // ajusta quando o dia é domingo
+      firstDayOfWeek.setDate(diff);
+      return normalizedRowDate >= firstDayOfWeek && normalizedRowDate <= today;
+    }
+    if (dateRange === "Semana passada") {
+      const firstDayOfLastWeek = new Date(today);
+      const day = today.getDay();
+      const diff = today.getDate() - day + (day === 0 ? -6 : 1) - 7;
+      firstDayOfLastWeek.setDate(diff);
+
+      const lastDayOfLastWeek = new Date(firstDayOfLastWeek);
+      lastDayOfLastWeek.setDate(firstDayOfLastWeek.getDate() + 6);
+
+      return normalizedRowDate >= firstDayOfLastWeek && normalizedRowDate <= lastDayOfLastWeek;
     }
     if (dateRange === "Este mês") {
       return normalizedRowDate.getMonth() === today.getMonth() && normalizedRowDate.getFullYear() === today.getFullYear();
@@ -621,6 +648,9 @@ export default function App() {
       const lastMonth = new Date(today);
       lastMonth.setMonth(today.getMonth() - 1);
       return normalizedRowDate.getMonth() === lastMonth.getMonth() && normalizedRowDate.getFullYear() === lastMonth.getFullYear();
+    }
+    if (dateRange === "Máximo") {
+      return true;
     }
     if (dateRange === "Personalizado") {
       if (!customStartDate || !customEndDate) return true;
@@ -653,26 +683,66 @@ export default function App() {
       d2.setDate(today.getDate() - 2);
       return normalizedRowDate.getTime() === d2.getTime();
     }
+    if (dateRange === "Hoje e ontem") {
+      const d3 = new Date(today);
+      d3.setDate(today.getDate() - 3);
+      const d2 = new Date(today);
+      d2.setDate(today.getDate() - 2);
+      return normalizedRowDate >= d3 && normalizedRowDate <= d2;
+    }
     if (dateRange === "Últimos 7 dias") {
       const d14 = new Date(today);
-      d14.setDate(today.getDate() - 14);
-      const d8 = new Date(today);
-      d8.setDate(today.getDate() - 8);
-      return normalizedRowDate >= d14 && normalizedRowDate <= d8;
+      d14.setDate(today.getDate() - 13);
+      const d7 = new Date(today);
+      d7.setDate(today.getDate() - 7);
+      return normalizedRowDate >= d14 && normalizedRowDate <= d7;
     }
-    if (dateRange === "Últimos 15 dias") {
-      const d30 = new Date(today);
-      d30.setDate(today.getDate() - 30);
-      const d16 = new Date(today);
-      d16.setDate(today.getDate() - 16);
-      return normalizedRowDate >= d30 && normalizedRowDate <= d16;
+    if (dateRange === "Últimos 14 dias") {
+      const d28 = new Date(today);
+      d28.setDate(today.getDate() - 27);
+      const d14 = new Date(today);
+      d14.setDate(today.getDate() - 14);
+      return normalizedRowDate >= d28 && normalizedRowDate <= d14;
+    }
+    if (dateRange === "Últimos 28 dias") {
+      const d56 = new Date(today);
+      d56.setDate(today.getDate() - 55);
+      const d28 = new Date(today);
+      d28.setDate(today.getDate() - 28);
+      return normalizedRowDate >= d56 && normalizedRowDate <= d28;
     }
     if (dateRange === "Últimos 30 dias") {
       const d60 = new Date(today);
-      d60.setDate(today.getDate() - 60);
-      const d31 = new Date(today);
-      d31.setDate(today.getDate() - 31);
-      return normalizedRowDate >= d60 && normalizedRowDate <= d31;
+      d60.setDate(today.getDate() - 59);
+      const d30 = new Date(today);
+      d30.setDate(today.getDate() - 30);
+      return normalizedRowDate >= d60 && normalizedRowDate <= d30;
+    }
+    if (dateRange === "Esta semana") {
+      const firstDayOfWeek = new Date(today);
+      const day = today.getDay();
+      const diff = today.getDate() - day + (day === 0 ? -6 : 1);
+      firstDayOfWeek.setDate(diff);
+
+      const firstDayOfLastWeek = new Date(firstDayOfWeek);
+      firstDayOfLastWeek.setDate(firstDayOfWeek.getDate() - 7);
+
+      const lastDayOfLastWeekToToday = new Date(firstDayOfLastWeek);
+      const currentDaysCount = Math.ceil((today.getTime() - firstDayOfWeek.getTime()) / (1000 * 3600 * 24));
+      lastDayOfLastWeekToToday.setDate(firstDayOfLastWeek.getDate() + currentDaysCount);
+
+      return normalizedRowDate >= firstDayOfLastWeek && normalizedRowDate <= lastDayOfLastWeekToToday;
+    }
+    if (dateRange === "Semana passada") {
+      const firstDayOf2WeeksAgo = new Date(today);
+      const day = today.getDay();
+      const diff = today.getDate() - day + (day === 0 ? -6 : 1) - 14;
+      firstDayOf2WeeksAgo.setDate(diff);
+
+      const lastDayOf2WeeksAgo = new Date(firstDayOf2WeeksAgo);
+      lastDayOf2WeeksAgo.setDate(firstDayOf2WeeksAgo.getDate() + 6);
+
+      return normalizedRowDate >= firstDayOf2WeeksAgo && normalizedRowDate <= lastDayOf2WeeksAgo;
     }
     if (dateRange === "Este mês") {
       const lastMonth = new Date(today);
@@ -683,6 +753,9 @@ export default function App() {
       const twoMonthsAgo = new Date(today);
       twoMonthsAgo.setMonth(today.getMonth() - 2);
       return normalizedRowDate.getMonth() === twoMonthsAgo.getMonth() && normalizedRowDate.getFullYear() === twoMonthsAgo.getFullYear();
+    }
+    if (dateRange === "Máximo") {
+      return false; // Retorna false para que não hajama métricas "anteriores" em all-time
     }
     if (dateRange === "Personalizado") {
       if (!customStartDate || !customEndDate) return true;
@@ -1436,11 +1509,16 @@ export default function App() {
                     >
                       <option>Hoje</option>
                       <option>Ontem</option>
+                      <option>Hoje e ontem</option>
                       <option>Últimos 7 dias</option>
-                      <option>Últimos 15 dias</option>
+                      <option>Últimos 14 dias</option>
+                      <option>Últimos 28 dias</option>
                       <option>Últimos 30 dias</option>
+                      <option>Esta semana</option>
+                      <option>Semana passada</option>
                       <option>Este mês</option>
                       <option>Mês passado</option>
+                      <option>Máximo</option>
                       <option>Personalizado</option>
                     </select>
                     <Calendar className="w-4 h-4 text-neutral-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -1610,11 +1688,16 @@ export default function App() {
                     >
                       <option>Hoje</option>
                       <option>Ontem</option>
+                      <option>Hoje e ontem</option>
                       <option>Últimos 7 dias</option>
-                      <option>Últimos 15 dias</option>
+                      <option>Últimos 14 dias</option>
+                      <option>Últimos 28 dias</option>
                       <option>Últimos 30 dias</option>
+                      <option>Esta semana</option>
+                      <option>Semana passada</option>
                       <option>Este mês</option>
                       <option>Mês passado</option>
+                      <option>Máximo</option>
                       <option>Personalizado</option>
                     </select>
                     <Calendar className="w-4 h-4 text-neutral-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
