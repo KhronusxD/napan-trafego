@@ -111,7 +111,7 @@ export default function App() {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   });
-  const [expandedWeekId, setExpandedWeekId] = useState<string | null>(null);
+  const [expandedWeekIds, setExpandedWeekIds] = useState<string[]>([]);
 
   // Simulation State
   const [simulationTabMonth, setSimulationTabMonth] = useState(() => {
@@ -2755,10 +2755,16 @@ export default function App() {
                   </h3>
                   <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
                     {monthlyMetrics.weeks.map((week) => {
-                      const isExpanded = expandedWeekId === week.id;
+                      const isExpanded = expandedWeekIds.includes(week.id);
                       return (
                         <div key={week.id} className={`border ${isExpanded ? 'border-indigo-200 shadow-md ring-1 ring-indigo-50/50 block-expanded z-10 scale-[1.01]' : 'border-neutral-100 shadow-sm'} bg-white rounded-xl p-5 transition-all duration-300 relative`}>
-                          <div className="flex items-center justify-between mb-4 pb-3 border-b border-neutral-200/60 cursor-pointer group" onClick={() => setExpandedWeekId(isExpanded ? null : week.id)}>
+                          <div className="flex items-center justify-between mb-4 pb-3 border-b border-neutral-200/60 cursor-pointer group" onClick={() => {
+                            setExpandedWeekIds(prev =>
+                              prev.includes(week.id)
+                                ? prev.filter(id => id !== week.id)
+                                : [...prev, week.id]
+                            );
+                          }}>
                             <div className="flex items-center gap-2">
                               <h4 className="font-semibold text-neutral-800 flex items-center gap-1.5 transition-colors group-hover:text-indigo-600">
                                 {week.label}
@@ -2818,7 +2824,7 @@ export default function App() {
                                   </div>
                                   <div className="flex justify-between text-[13px]">
                                     <span className="text-blue-600/70">Compras</span>
-                                    <span className="font-semibold text-blue-900">{week.metrics.metaPurchases}</span>
+                                    <span className="font-semibold text-blue-900 truncate max-w-[80px] text-right" title={String(week.metrics.metaPurchases)}>{Math.round(week.metrics.metaPurchases || 0)}</span>
                                   </div>
                                   <div className="flex justify-between text-[13px] pt-1 border-t border-blue-100">
                                     <span className="font-medium text-blue-800">ROI</span>
@@ -2841,7 +2847,7 @@ export default function App() {
                                   </div>
                                   <div className="flex justify-between text-[13px]">
                                     <span className="text-rose-600/70">Compras</span>
-                                    <span className="font-semibold text-rose-900">{week.metrics.googlePurchases}</span>
+                                    <span className="font-semibold text-rose-900 truncate max-w-[80px] text-right" title={String(week.metrics.googlePurchases)}>{Math.round(week.metrics.googlePurchases || 0)}</span>
                                   </div>
                                   <div className="flex justify-between text-[13px] pt-1 border-t border-rose-100">
                                     <span className="font-medium text-rose-800">ROI</span>
