@@ -55,6 +55,19 @@ import {
   strategyConfig,
 } from "./data/mockData";
 import { supabase } from "./lib/supabase";
+import {
+  BarChart,
+  Bar,
+  LineChart as RechartsLineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as RechartsTooltip,
+  ResponsiveContainer,
+  Legend,
+  ReferenceLine
+} from "recharts";
 
 const VariationBadge = ({ current, previous, inverse = false, neutral = false }: { current: number, previous: number, inverse?: boolean, neutral?: boolean }) => {
   if (!previous || previous === 0) return null;
@@ -96,6 +109,11 @@ export default function App() {
   const [allowedCompanyIds, setAllowedCompanyIds] = useState<string[]>([]);
   const [selectedCompany, setSelectedCompany] = useState(companies[0].id);
   const [activeTab, setActiveTab] = useState("overview");
+
+  // Daily Chart Settings
+  const [chartSource, setChartSource] = useState<"all" | "meta" | "google">("all");
+  const [chartType, setChartType] = useState<"bar" | "line">("bar");
+
   const [dateRange, setDateRange] = useState("Últimos 30 dias");
   const [customStartDate, setCustomStartDate] = useState(() => {
     const d = new Date();
@@ -818,6 +836,90 @@ export default function App() {
   });
 
   const formattedRevenue = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(computedMetrics.revenue);
+
+  // Calculate daily data for the chart from filteredData
+  const dailyChartData = useMemo(() => {
+    if (!filteredData.length && !trafficData.length && !googleAdsData.length) return [];
+
+    const dailyMap = new Map<string, {
+      dateStr: string,
+      timestamp: number,
+      totalRevenue: number,
+      metaRevenue: number,
+      metaCost: number,
+      googleRevenue: number,
+      googleCost: number
+    }>();
+
+    const getOrCreateDay = (d: Date) => {
+      const dateStr = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+      const timestamp = d.getTime();
+      if (!dailyMap.has(dateStr)) {
+        dailyMap.set(dateStr, {
+          dateStr,
+          timestamp,
+          totalRevenue: 0,
+          metaRevenue: 0,
+          metaCost: 0,
+          googleRevenue: 0,
+          googleCost: 0
+        });
+      }
+      return dailyMap.get(dateStr)!;
+    };
+
+    // Process Revenue (Total)
+    filteredData.forEach(row => {
+      const d = parseDate(row["Data"]);
+      if (d) {
+        const dayData = getOrCreateDay(d);
+        const rStr = row["Pedidos Pagos"] || "0";
+        const rNum = parseFloat(rStr.replace(/\./g, '').replace(',', '.'));
+        if (!isNaN(rNum)) dayData.totalRevenue += rNum;
+      }
+    });
+
+    // Process Meta Ads Costs & Revenue
+    trafficData.forEach(row => {
+      const d = parseDate(row["Data"]);
+      if (d && isDateInRange(d)) {
+        const dayData = getOrCreateDay(d);
+
+        const gStr = row["Investimento"] || row["Gastos"] || "0";
+        const gNum = parseFloat(gStr.replace(/\./g, '').replace(',', '.'));
+        if (!isNaN(gNum)) dayData.metaCost += gNum;
+
+        const rStr = row["Faturamento Meta Ads"] || "0";
+        const rNum = parseFloat(rStr.replace(/\./g, '').replace(',', '.'));
+        if (!isNaN(rNum)) dayData.metaRevenue += rNum;
+      }
+    });
+
+    // Process Google Ads Costs & Revenue
+    googleAdsData.forEach(row => {
+      const d = parseDate(row["Data"]);
+      if (d && isDateInRange(d)) {
+        const dayData = getOrCreateDay(d);
+
+        const gStr = row["Investimento"] || row["Gastos"] || "0";
+        const gNum = parseFloat(gStr.replace(/\./g, '').replace(',', '.'));
+        if (!isNaN(gNum)) dayData.googleCost += gNum;
+
+        const rStr = row["Faturamento Google Ads"] || row["Valor da conversão"] || "0";
+        const rNum = parseFloat(rStr.replace(/\./g, '').replace(',', '.'));
+        if (!isNaN(rNum)) dayData.googleRevenue += rNum;
+      }
+    });
+
+    // Calculate derived fields & Sort
+    const result = Array.from(dailyMap.values()).map(item => ({
+      ...item,
+      totalCost: item.metaCost + item.googleCost,
+      profit: item.totalRevenue - (item.metaCost + item.googleCost)
+    })).sort((a, b) => a.timestamp - b.timestamp);
+
+    return result;
+  }, [filteredData, trafficData, googleAdsData, dateRange, customStartDate, customEndDate]);
 
   // Compute traffic metrics
   const computedTrafficMetrics = useMemo(() => {
@@ -1619,6 +1721,184 @@ export default function App() {
                   }
                 />
               </div>
+
+              {/* Daily Profitability Chart */}
+              {dailyChartData.length > 0 && (
+                <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm p-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-4">
+                    <div>
+                      <h3 className="text-lg font-semibold text-neutral-800">Faturamento Diário</h3>
+                      <p className="text-sm text-neutral-500">Acompanhe as receitas e investimentos diários detalhados</p>
+                    </div>
+                    <div className="flex flex-col sm:flex-row items-center gap-4">
+                      {/* Chart Source Toggle */}
+                      <div className="flex bg-neutral-100 p-1 rounded-lg">
+                        <button
+                          onClick={() => setChartSource('all')}
+                          className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${chartSource === 'all' ? 'bg-white text-neutral-800 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'
+                            }`}
+                        >
+                          Juntos
+                        </button>
+                        <button
+                          onClick={() => setChartSource('meta')}
+                          className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${chartSource === 'meta' ? 'bg-white text-blue-600 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'
+                            }`}
+                        >
+                          Meta Ads
+                        </button>
+                        <button
+                          onClick={() => setChartSource('google')}
+                          className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${chartSource === 'google' ? 'bg-white text-emerald-600 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'
+                            }`}
+                        >
+                          Google Ads
+                        </button>
+                      </div>
+
+                      {/* Chart Type Toggle */}
+                      <div className="flex bg-neutral-100 p-1 rounded-lg">
+                        <button
+                          onClick={() => setChartType('bar')}
+                          className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${chartType === 'bar' ? 'bg-white text-neutral-800 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'
+                            }`}
+                        >
+                          Barras
+                        </button>
+                        <button
+                          onClick={() => setChartType('line')}
+                          className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${chartType === 'line' ? 'bg-white text-neutral-800 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'
+                            }`}
+                        >
+                          Linhas
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="h-[350px] w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      {chartType === 'bar' ? (
+                        <BarChart
+                          data={dailyChartData}
+                          margin={{
+                            top: 20,
+                            right: 30,
+                            left: 20,
+                            bottom: 5,
+                          }}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                          <XAxis
+                            dataKey="dateStr"
+                            axisLine={false}
+                            tickLine={false}
+                            tick={{ fill: '#6B7280', fontSize: 12 }}
+                            dy={10}
+                          />
+                          <YAxis
+                            axisLine={false}
+                            tickLine={false}
+                            tick={{ fill: '#6B7280', fontSize: 12 }}
+                            tickFormatter={(value) => `R$ ${value >= 1000 ? (value / 1000).toFixed(1) + 'k' : value}`}
+                            dx={-10}
+                          />
+                          <RechartsTooltip
+                            cursor={{ fill: '#F3F4F6' }}
+                            contentStyle={{ borderRadius: '12px', border: '1px solid #E5E7EB', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                            formatter={(value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)}
+                            labelStyle={{ color: '#374151', fontWeight: 600, marginBottom: '4px' }}
+                          />
+                          <Legend wrapperStyle={{ paddingTop: '20px' }} />
+                          <ReferenceLine y={0} stroke="#9CA3AF" />
+
+                          <Bar dataKey="totalRevenue" name="Receita Total" fill="#34D399" radius={[4, 4, 0, 0]} maxBarSize={40} />
+
+                          {chartSource === 'meta' && (
+                            <>
+                              <Bar dataKey="metaRevenue" name="Receita Meta" fill="#3B82F6" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                              <Bar dataKey="metaCost" name="Custo Meta" fill="#EF4444" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                            </>
+                          )}
+
+                          {chartSource === 'google' && (
+                            <>
+                              <Bar dataKey="googleRevenue" name="Receita Google" fill="#10B981" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                              <Bar dataKey="googleCost" name="Custo Google" fill="#F59E0B" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                            </>
+                          )}
+
+                          {chartSource === 'all' && (
+                            <>
+                              <Bar dataKey="totalCost" name="Custo Total" fill="#F87171" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                              <Bar dataKey="profit" name="Lucro" fill="#6366F1" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                            </>
+                          )}
+
+                        </BarChart>
+                      ) : (
+                        <RechartsLineChart
+                          data={dailyChartData}
+                          margin={{
+                            top: 20,
+                            right: 30,
+                            left: 20,
+                            bottom: 5,
+                          }}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                          <XAxis
+                            dataKey="dateStr"
+                            axisLine={false}
+                            tickLine={false}
+                            tick={{ fill: '#6B7280', fontSize: 12 }}
+                            dy={10}
+                          />
+                          <YAxis
+                            axisLine={false}
+                            tickLine={false}
+                            tick={{ fill: '#6B7280', fontSize: 12 }}
+                            tickFormatter={(value) => `R$ ${value >= 1000 ? (value / 1000).toFixed(1) + 'k' : value}`}
+                            dx={-10}
+                          />
+                          <RechartsTooltip
+                            cursor={{ stroke: '#9CA3AF', strokeWidth: 1, strokeDasharray: '3 3' }}
+                            contentStyle={{ borderRadius: '12px', border: '1px solid #E5E7EB', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                            formatter={(value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)}
+                            labelStyle={{ color: '#374151', fontWeight: 600, marginBottom: '4px' }}
+                          />
+                          <Legend wrapperStyle={{ paddingTop: '20px' }} />
+                          <ReferenceLine y={0} stroke="#9CA3AF" />
+
+                          <Line type="monotone" dataKey="totalRevenue" name="Receita Total" stroke="#34D399" strokeWidth={3} dot={{ r: 4, strokeWidth: 2 }} activeDot={{ r: 6 }} />
+
+                          {chartSource === 'meta' && (
+                            <>
+                              <Line type="monotone" dataKey="metaRevenue" name="Receita Meta" stroke="#3B82F6" strokeWidth={3} dot={{ r: 4, strokeWidth: 2 }} activeDot={{ r: 6 }} />
+                              <Line type="monotone" dataKey="metaCost" name="Custo Meta" stroke="#EF4444" strokeWidth={3} dot={{ r: 4, strokeWidth: 2 }} activeDot={{ r: 6 }} />
+                            </>
+                          )}
+
+                          {chartSource === 'google' && (
+                            <>
+                              <Line type="monotone" dataKey="googleRevenue" name="Receita Google" stroke="#10B981" strokeWidth={3} dot={{ r: 4, strokeWidth: 2 }} activeDot={{ r: 6 }} />
+                              <Line type="monotone" dataKey="googleCost" name="Custo Google" stroke="#F59E0B" strokeWidth={3} dot={{ r: 4, strokeWidth: 2 }} activeDot={{ r: 6 }} />
+                            </>
+                          )}
+
+                          {chartSource === 'all' && (
+                            <>
+                              <Line type="monotone" dataKey="totalCost" name="Custo Total" stroke="#F87171" strokeWidth={3} dot={{ r: 4, strokeWidth: 2 }} activeDot={{ r: 6 }} />
+                              <Line type="monotone" dataKey="profit" name="Lucro" stroke="#6366F1" strokeWidth={3} dot={{ r: 4, strokeWidth: 2 }} activeDot={{ r: 6 }} />
+                            </>
+                          )}
+
+                        </RechartsLineChart>
+                      )}
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              )}
 
               {/* Insights Panel */}
               <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm overflow-hidden">
