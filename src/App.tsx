@@ -1591,7 +1591,7 @@ export default function App() {
               <BarChart3 className="w-5 h-5 text-white" />
             </div>
             <h1 className="text-xl font-semibold tracking-tight">
-              NAPAN Traffic Hub
+              Dashboards
             </h1>
           </div>
 
