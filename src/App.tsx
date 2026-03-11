@@ -323,10 +323,14 @@ export default function App() {
     const hasTrafficGid = "trafficGid" in (currentCompanyObj || {});
     const hasGoogleAdsGid = "googleAdsGid" in (currentCompanyObj || {});
 
+    const isWhatsapp = (currentCompanyObj as any)?.type === "whatsapp";
+    const customSpreadsheetId = (currentCompanyObj as any)?.spreadsheetId;
+    const customSheetTab = (currentCompanyObj as any)?.sheetTab || tabName;
+
     // Fetch Revenue Sheet
     const url = hasSheetGid
       ? `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&gid=${(currentCompanyObj as any).sheetGid}`
-      : `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tabName)}`;
+      : `https://docs.google.com/spreadsheets/d/${customSpreadsheetId || SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(customSheetTab)}`;
 
     Papa.parse(url, {
       download: true,
@@ -339,7 +343,17 @@ export default function App() {
             setSheetError(`A planilha é privada. Você precisa alterar o acesso para "Qualquer pessoa com o link" no Google Sheets.`);
           } else {
             setSheetHeaders(results.meta.fields || []);
-            const validData = results.data.filter((row: any) => Object.values(row).some(val => val !== ""));
+            let validData = results.data.filter((row: any) => Object.values(row).some(val => val !== ""));
+
+            if (isWhatsapp) {
+              validData = validData.map((row: any) => ({
+                ...row,
+                "Data": row[""] || row["Data"],
+                "Pedidos Pagos": row["$ Total WhatsApp"] || "0",
+                "Quantidade Pedidos": row["Qtd. Fechamentos"] || "0"
+              }));
+            }
+
             setSheetData(validData);
           }
         }
@@ -354,7 +368,7 @@ export default function App() {
     // Fetch Traffic Sheet
     const trafficUrl = hasTrafficGid
       ? `https://docs.google.com/spreadsheets/d/${TRAFFIC_SHEET_ID}/gviz/tq?tqx=out:csv&gid=${(currentCompanyObj as any).trafficGid}`
-      : `https://docs.google.com/spreadsheets/d/${TRAFFIC_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tabName)}`;
+      : `https://docs.google.com/spreadsheets/d/${customSpreadsheetId || TRAFFIC_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(customSheetTab)}`;
 
     Papa.parse(trafficUrl, {
       download: true,
@@ -366,7 +380,21 @@ export default function App() {
           if (results.meta.fields && results.meta.fields.length === 1 && results.meta.fields[0].includes("<!DOCTYPE html>")) {
             setTrafficError(`A planilha de tráfego é privada. Você precisa alterar o acesso para "Qualquer pessoa com o link".`);
           } else {
-            const validData = results.data.filter((row: any) => Object.values(row).some(val => val !== ""));
+            let validData = results.data.filter((row: any) => Object.values(row).some(val => val !== ""));
+
+            if (isWhatsapp) {
+              validData = validData.map((row: any) => ({
+                ...row,
+                "Data": row[""] || row["Data"],
+                "Investimento": row["Invest. Meta Ads"] || "0",
+                "Faturamento Meta Ads": row["$ Total WhatsApp"] || "0",
+                "Compras Meta": row["Qtd. Fechamentos"] || "0",
+                "Cliques no Link": row["Meta Ads"] || "0",
+                "Visualizações de Página": row["Lead Contados do Tráfego"] || "0",
+                "Adições no Carrinho": row["Leads WhatsApp"] || "0"
+              }));
+            }
+
             setTrafficData(validData);
           }
         }
@@ -382,7 +410,9 @@ export default function App() {
     const googleAdsTabName = `${tabName} - Google Ads`;
     const googleAdsUrl = hasGoogleAdsGid
       ? `https://docs.google.com/spreadsheets/d/${TRAFFIC_SHEET_ID}/gviz/tq?tqx=out:csv&gid=${(currentCompanyObj as any).googleAdsGid}`
-      : `https://docs.google.com/spreadsheets/d/${TRAFFIC_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(googleAdsTabName)}`;
+      : isWhatsapp
+        ? `https://docs.google.com/spreadsheets/d/${customSpreadsheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(customSheetTab)}`
+        : `https://docs.google.com/spreadsheets/d/${TRAFFIC_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(googleAdsTabName)}`;
 
     Papa.parse(googleAdsUrl, {
       download: true,
@@ -394,7 +424,20 @@ export default function App() {
           if (results.meta.fields && results.meta.fields.length === 1 && results.meta.fields[0].includes("<!DOCTYPE html>")) {
             setGoogleAdsError(`A planilha do Google Ads é privada. Você precisa alterar o acesso para "Qualquer pessoa com o link".`);
           } else {
-            const validData = results.data.filter((row: any) => Object.values(row).some(val => val !== ""));
+            let validData = results.data.filter((row: any) => Object.values(row).some(val => val !== ""));
+
+            if (isWhatsapp) {
+              validData = validData.map((row: any) => ({
+                ...row,
+                "Data": row[""] || row["Data"],
+                "Investimento": row["Invest. Google Ads"] || "0",
+                "Valor da conversão": "0",
+                "Conversões": "0",
+                "Cliques": row["Google Ads"] || "0",
+                "Adições ao carrinho": "0"
+              }));
+            }
+
             setGoogleAdsData(validData);
           }
         }
