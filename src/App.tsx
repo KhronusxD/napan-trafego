@@ -241,7 +241,7 @@ export default function App() {
         setAccountHealth(defaultAccountHealth);
       }
     };
-    if (isAuthenticated && (allowedCompanyIds.length === 0 || allowedCompanyIds.includes(selectedCompany))) {
+    if (isAuthenticated && (allowedCompanyIds.includes('ALL') || allowedCompanyIds.includes(selectedCompany))) {
       fetchData();
     }
     setIsEditingStrategy(false);
@@ -256,20 +256,20 @@ export default function App() {
           .select('company_id')
           .eq('user_email', email);
 
-        if (error || !data) {
-          console.error("Erro ao buscar acesso do usuário:", error);
-          setAllowedCompanyIds([]);
+        if (error || !data || data.length === 0) {
+          console.error("Erro ao buscar acesso do usuário ou usuário sem acesso:", error);
+          setAllowedCompanyIds(['NONE']);
           return;
         }
 
         const ids = data.map((d: any) => {
           if (d.company_id === 'ALL') return 'ALL';
 
-          const exactMatch = companies.find(c => c.id === d.company_id);
+          const dbId = d.company_id.trim().toLowerCase();
+          const exactMatch = companies.find(c => c.id.toLowerCase() === dbId);
           if (exactMatch) return exactMatch.id;
 
-          // Normaliza 'Fabrica_do_Livro' para 'fabrica-do-livro'
-          return d.company_id.toLowerCase().replace(/_/g, '-');
+          return d.company_id.trim().toLowerCase().replace(/_/g, '-');
         });
         if (ids.includes('ALL')) {
           setAllowedCompanyIds(companies.map(c => c.id));
@@ -284,7 +284,7 @@ export default function App() {
         }
       } catch (err) {
         console.error("Erro inesperado ao buscar acesso:", err);
-        setAllowedCompanyIds([]);
+        setAllowedCompanyIds(['NONE']);
       }
     };
 
@@ -306,7 +306,7 @@ export default function App() {
       if (session?.user?.email) {
         loadUserAccess(session.user.email);
       } else {
-        setAllowedCompanyIds([]);
+        setAllowedCompanyIds(['NONE']);
       }
     });
 
@@ -350,7 +350,6 @@ export default function App() {
           if (results.meta.fields && results.meta.fields.length === 1 && results.meta.fields[0].includes("<!DOCTYPE html>")) {
             setSheetError(`A planilha é privada. Você precisa alterar o acesso para "Qualquer pessoa com o link" no Google Sheets.`);
           } else {
-            setSheetHeaders(results.meta.fields || []);
             let validData = results.data.filter((row: any) => Object.values(row).some(val => val !== ""));
 
             if (isWhatsapp) {
@@ -1604,7 +1603,7 @@ export default function App() {
                 disabled={allowedCompanyIds.length <= 1 && allowedCompanyIds.length !== 0}
                 className={`appearance-none bg-neutral-100 border border-neutral-200 text-neutral-800 py-2 pl-4 pr-10 rounded-lg font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent ${allowedCompanyIds.length <= 1 && allowedCompanyIds.length !== 0 ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer'}`}
               >
-                {companies.filter(c => allowedCompanyIds.length === 0 || allowedCompanyIds.includes(c.id)).map((company) => (
+                {companies.filter(c => allowedCompanyIds.includes('ALL') || allowedCompanyIds.includes(c.id)).map((company) => (
                   <option key={company.id} value={company.id}>
                     {company.name}
                   </option>
