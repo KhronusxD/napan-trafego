@@ -25,6 +25,7 @@ import {
   Plus,
   X,
   Activity,
+  CheckCircle,
   FileSpreadsheet,
   AlertCircle,
   RefreshCw,
@@ -35,7 +36,6 @@ import {
   Settings,
   HelpCircle,
   Download,
-  PieChart,
   LineChart,
   Zap,
   History,
@@ -66,7 +66,9 @@ import {
   Tooltip as RechartsTooltip,
   ResponsiveContainer,
   Legend,
-  ReferenceLine
+  ReferenceLine,
+  PieChart,
+  Pie
 } from "recharts";
 
 const VariationBadge = ({ current, previous, inverse = false, neutral = false }: { current: number, previous: number, inverse?: boolean, neutral?: boolean }) => {
@@ -326,11 +328,13 @@ export default function App() {
     const isWhatsapp = (currentCompanyObj as any)?.type === "whatsapp";
     const customSpreadsheetId = (currentCompanyObj as any)?.spreadsheetId;
     const customSheetTab = (currentCompanyObj as any)?.sheetTab || tabName;
+    const sheetRange = (currentCompanyObj as any)?.sheetRange;
+    const rangeParams = sheetRange ? `&range=${sheetRange}` : "";
 
     // Fetch Revenue Sheet
     const url = hasSheetGid
-      ? `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&gid=${(currentCompanyObj as any).sheetGid}`
-      : `https://docs.google.com/spreadsheets/d/${customSpreadsheetId || SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(customSheetTab)}`;
+      ? `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&gid=${(currentCompanyObj as any).sheetGid}${rangeParams}`
+      : `https://docs.google.com/spreadsheets/d/${customSpreadsheetId || SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(customSheetTab)}${rangeParams}`;
 
     Papa.parse(url, {
       download: true,
@@ -346,12 +350,18 @@ export default function App() {
             let validData = results.data.filter((row: any) => Object.values(row).some(val => val !== ""));
 
             if (isWhatsapp) {
-              validData = validData.map((row: any) => ({
-                ...row,
-                "Data": row[""] || row["Data"],
-                "Pedidos Pagos": row["$ Total WhatsApp"] || "0",
-                "Quantidade Pedidos": row["Qtd. Fechamentos"] || "0"
-              }));
+              validData = validData.map((row: any) => {
+                const getVal = (fields: string[]) => {
+                  for (let f of fields) { if (row[f] !== undefined && row[f] !== "") return row[f]; }
+                  return "0";
+                };
+                return {
+                  ...row,
+                  "Data": row[""] || row["Data"],
+                  "Pedidos Pagos": getVal(["Faturamento", "$ Total Tráfego", "$ Total WhatsApp"]),
+                  "Quantidade Pedidos": getVal(["Fechamentos", "Qtd. Fechamentos"])
+                };
+              });
             }
 
             setSheetData(validData);
@@ -367,8 +377,8 @@ export default function App() {
 
     // Fetch Traffic Sheet
     const trafficUrl = hasTrafficGid
-      ? `https://docs.google.com/spreadsheets/d/${TRAFFIC_SHEET_ID}/gviz/tq?tqx=out:csv&gid=${(currentCompanyObj as any).trafficGid}`
-      : `https://docs.google.com/spreadsheets/d/${customSpreadsheetId || TRAFFIC_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(customSheetTab)}`;
+      ? `https://docs.google.com/spreadsheets/d/${TRAFFIC_SHEET_ID}/gviz/tq?tqx=out:csv&gid=${(currentCompanyObj as any).trafficGid}${rangeParams}`
+      : `https://docs.google.com/spreadsheets/d/${customSpreadsheetId || TRAFFIC_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(customSheetTab)}${rangeParams}`;
 
     Papa.parse(trafficUrl, {
       download: true,
@@ -383,16 +393,22 @@ export default function App() {
             let validData = results.data.filter((row: any) => Object.values(row).some(val => val !== ""));
 
             if (isWhatsapp) {
-              validData = validData.map((row: any) => ({
-                ...row,
-                "Data": row[""] || row["Data"],
-                "Investimento": row["Invest. Meta Ads"] || "0",
-                "Faturamento Meta Ads": row["$ Total WhatsApp"] || "0",
-                "Compras Meta": row["Qtd. Fechamentos"] || "0",
-                "Cliques no Link": row["Meta Ads"] || "0",
-                "Visualizações de Página": row["Lead Contados do Tráfego"] || "0",
-                "Adições no Carrinho": row["Leads WhatsApp"] || "0"
-              }));
+              validData = validData.map((row: any) => {
+                const getVal = (fields: string[]) => {
+                  for (let f of fields) { if (row[f] !== undefined && row[f] !== "") return row[f]; }
+                  return "0";
+                };
+                return {
+                  ...row,
+                  "Data": row[""] || row["Data"],
+                  "Investimento": getVal(["Invest. Meta Ads", "Invest. Meta"]),
+                  "Faturamento Meta Ads": "0",
+                  "Compras Meta": "0",
+                  "Cliques no Link": "0",
+                  "Visualizações de Página": "0",
+                  "Adições no Carrinho": getVal(["Leads Totais", "Leads WhatsApp (Meta + Google)", "Leads WhatsApp"])
+                };
+              });
             }
 
             setTrafficData(validData);
@@ -409,10 +425,10 @@ export default function App() {
     // Fetch Google Ads Sheet
     const googleAdsTabName = `${tabName} - Google Ads`;
     const googleAdsUrl = hasGoogleAdsGid
-      ? `https://docs.google.com/spreadsheets/d/${TRAFFIC_SHEET_ID}/gviz/tq?tqx=out:csv&gid=${(currentCompanyObj as any).googleAdsGid}`
+      ? `https://docs.google.com/spreadsheets/d/${TRAFFIC_SHEET_ID}/gviz/tq?tqx=out:csv&gid=${(currentCompanyObj as any).googleAdsGid}${rangeParams}`
       : isWhatsapp
-        ? `https://docs.google.com/spreadsheets/d/${customSpreadsheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(customSheetTab)}`
-        : `https://docs.google.com/spreadsheets/d/${TRAFFIC_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(googleAdsTabName)}`;
+        ? `https://docs.google.com/spreadsheets/d/${customSpreadsheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(customSheetTab)}${rangeParams}`
+        : `https://docs.google.com/spreadsheets/d/${TRAFFIC_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(googleAdsTabName)}${rangeParams}`;
 
     Papa.parse(googleAdsUrl, {
       download: true,
@@ -427,15 +443,21 @@ export default function App() {
             let validData = results.data.filter((row: any) => Object.values(row).some(val => val !== ""));
 
             if (isWhatsapp) {
-              validData = validData.map((row: any) => ({
-                ...row,
-                "Data": row[""] || row["Data"],
-                "Investimento": row["Invest. Google Ads"] || "0",
-                "Valor da conversão": "0",
-                "Conversões": "0",
-                "Cliques": row["Google Ads"] || "0",
-                "Adições ao carrinho": "0"
-              }));
+              validData = validData.map((row: any) => {
+                const getVal = (fields: string[]) => {
+                  for (let f of fields) { if (row[f] !== undefined && row[f] !== "") return row[f]; }
+                  return "0";
+                };
+                return {
+                  ...row,
+                  "Data": row[""] || row["Data"],
+                  "Investimento": getVal(["Invest. Google Ads", "Invest. Google"]),
+                  "Valor da conversão": "0",
+                  "Conversões": "0",
+                  "Cliques": "0",
+                  "Adições ao carrinho": "0"
+                };
+              });
             }
 
             setGoogleAdsData(validData);
@@ -1140,6 +1162,49 @@ export default function App() {
     googleRoi = `${(computedTrafficMetrics.faturamentoGoogle / computedTrafficMetrics.investimentoGoogle).toFixed(2)}x`;
   }
 
+  // Calculate new Metrics (Leads, CAC, CPL/CPA)
+  const isWhatsapp = (companies.find(c => c.id === selectedCompany) as any)?.type === "whatsapp";
+
+  const totalLeads = useMemo(() => {
+    let leads = 0;
+    trafficData.forEach(row => {
+      const d = parseDate(row["Data"]);
+      if (d && isDateInRange(d)) {
+        // We mapped Whatsapp Leads to Adições no Carrinho
+        const lStr = row["Adições no Carrinho"] || "0";
+        const l = parseInt(lStr.replace(/\./g, ''), 10);
+        if (!isNaN(l)) leads += l;
+      }
+    });
+    return leads;
+  }, [trafficData, dateRange, customStartDate, customEndDate]);
+
+  const prevTotalLeads = useMemo(() => {
+    let leads = 0;
+    trafficData.forEach(row => {
+      const d = parseDate(row["Data"]);
+      if (d && isDateInPreviousRange(d)) {
+        const lStr = row["Adições no Carrinho"] || "0";
+        const l = parseInt(lStr.replace(/\./g, ''), 10);
+        if (!isNaN(l)) leads += l;
+      }
+    });
+    return leads;
+  }, [trafficData, dateRange, customStartDate, customEndDate]);
+
+  const totalConversions = isWhatsapp ? computedMetrics.purchases : computedMetrics.purchases;
+  const prevTotalConversions = isWhatsapp ? computedMetrics.prevPurchases : computedMetrics.prevPurchases;
+
+  const currentCac = totalConversions > 0 ? investmentNum / totalConversions : 0;
+  const prevCac = prevTotalConversions > 0 ? prevInvestmentNum / prevTotalConversions : 0;
+
+  const currentCpl = isWhatsapp
+    ? (totalLeads > 0 ? investmentNum / totalLeads : 0)
+    : (totalConversions > 0 ? investmentNum / totalConversions : 0); // fallback CPA for e-commerce
+  const prevCpl = isWhatsapp
+    ? (prevTotalLeads > 0 ? prevInvestmentNum / prevTotalLeads : 0)
+    : (prevTotalConversions > 0 ? prevInvestmentNum / prevTotalConversions : 0);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoggingIn(true);
@@ -1673,7 +1738,7 @@ export default function App() {
               </div>
 
               {/* Metric Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
                 <MetricCard
                   title="Faturamento"
                   value={formattedRevenue}
@@ -1720,49 +1785,84 @@ export default function App() {
                   }
                 />
                 <MetricCard
-                  title="Compras"
-                  value={computedMetrics.purchases.toString()}
-                  currentAmount={computedMetrics.purchases}
-                  previousAmount={computedMetrics.prevPurchases}
+                  title={isWhatsapp ? "Leads Totais" : "Compras"}
+                  value={isWhatsapp ? totalLeads.toString() : computedMetrics.purchases.toString()}
+                  currentAmount={isWhatsapp ? totalLeads : computedMetrics.purchases}
+                  previousAmount={isWhatsapp ? prevTotalLeads : computedMetrics.prevPurchases}
                   isCurrency={false}
-                  icon={<ShoppingCart className="w-5 h-5 text-blue-600" />}
+                  icon={isWhatsapp ? <Users className="w-5 h-5 text-blue-600" /> : <ShoppingCart className="w-5 h-5 text-blue-600" />}
                   subtitle={
-                    <div className="flex flex-col gap-1 mt-1 text-[10px] sm:text-xs">
-                      <div className="flex items-center gap-1">
-                        <span className="text-blue-600 font-medium bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100">
-                          Meta: {computedTrafficMetrics.metaPurchases.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} ({computedMetrics.purchases > 0 ? ((computedTrafficMetrics.metaPurchases / computedMetrics.purchases) * 100).toFixed(1) : 0}%)
-                        </span>
+                    !isWhatsapp ? (
+                      <div className="flex flex-col gap-1 mt-1 text-[10px] sm:text-xs">
+                        <div className="flex items-center gap-1">
+                          <span className="text-blue-600 font-medium bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100">
+                            Meta: {computedTrafficMetrics.metaPurchases.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} ({computedMetrics.purchases > 0 ? ((computedTrafficMetrics.metaPurchases / computedMetrics.purchases) * 100).toFixed(1) : 0}%)
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <span className="text-emerald-600 font-medium bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">
+                            Google: {computedTrafficMetrics.googlePurchases.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} ({computedMetrics.purchases > 0 ? ((computedTrafficMetrics.googlePurchases / computedMetrics.purchases) * 100).toFixed(1) : 0}%)
+                          </span>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-1">
-                        <span className="text-emerald-600 font-medium bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">
-                          Google: {computedTrafficMetrics.googlePurchases.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} ({computedMetrics.purchases > 0 ? ((computedTrafficMetrics.googlePurchases / computedMetrics.purchases) * 100).toFixed(1) : 0}%)
-                        </span>
-                      </div>
-                    </div>
+                    ) : undefined
                   }
                 />
-                <MetricCard
-                  title="ROI"
-                  value={calculatedRoi}
-                  currentAmount={currentCalculatedRoiNum}
-                  previousAmount={prevCalculatedRoiNum}
-                  isCurrency={false}
-                  icon={<BarChart3 className="w-5 h-5 text-purple-600" />}
-                  subtitle={
-                    <div className="flex flex-col gap-1 mt-1 text-[10px] sm:text-xs">
-                      <div className="flex items-center gap-1">
-                        <span className="text-blue-600 font-medium bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100">
-                          Meta: {metaRoi}
-                        </span>
+                {isWhatsapp ? (
+                  <MetricCard
+                    title="Fechamentos"
+                    value={computedMetrics.purchases.toString()}
+                    currentAmount={computedMetrics.purchases}
+                    previousAmount={computedMetrics.prevPurchases}
+                    isCurrency={false}
+                    icon={<CheckCircle2 className="w-5 h-5 text-purple-600" />}
+                  />
+                ) : (
+                  <MetricCard
+                    title="ROI"
+                    value={calculatedRoi}
+                    currentAmount={currentCalculatedRoiNum}
+                    previousAmount={prevCalculatedRoiNum}
+                    isCurrency={false}
+                    icon={<BarChart3 className="w-5 h-5 text-purple-600" />}
+                    subtitle={
+                      <div className="flex flex-col gap-1 mt-1 text-[10px] sm:text-xs">
+                        <div className="flex items-center gap-1">
+                          <span className="text-blue-600 font-medium bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100">
+                            Meta: {metaRoi}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <span className="text-emerald-600 font-medium bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">
+                            Google: {googleRoi}
+                          </span>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-1">
-                        <span className="text-emerald-600 font-medium bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">
-                          Google: {googleRoi}
-                        </span>
-                      </div>
-                    </div>
-                  }
-                />
+                    }
+                  />
+                )}
+                {isWhatsapp ? (
+                  <MetricCard
+                    title="CAC"
+                    value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(currentCac)}
+                    currentAmount={currentCac}
+                    previousAmount={prevCac}
+                    isCurrency={true}
+                    icon={<Activity className="w-5 h-5 text-orange-600" />}
+                    inverseChange
+                  />
+                ) : null}
+                {isWhatsapp && (
+                  <MetricCard
+                    title="CPL"
+                    value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(currentCpl)}
+                    currentAmount={currentCpl}
+                    previousAmount={prevCpl}
+                    isCurrency={true}
+                    icon={<Filter className="w-5 h-5 text-teal-600" />}
+                    inverseChange
+                  />
+                )}
               </div>
 
               {/* Daily Profitability Chart */}
@@ -1943,7 +2043,102 @@ export default function App() {
                 </div>
               )}
 
-              {/* Insights Panel */}
+              {/* Main Charts Row */}
+              {isWhatsapp && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  {/* Origins Pie Chart */}
+                  <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm p-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
+                    <div className="mb-6">
+                      <h3 className="text-lg font-semibold text-neutral-800">
+                        Origem dos Leads
+                      </h3>
+                      <p className="text-sm text-neutral-500">Distribuição entre Meta, Google e outras fontes</p>
+                    </div>
+                    <div className="h-[300px] w-full flex items-center justify-center">
+                      {(() => {
+                        const metaOrigin = computedTrafficMetrics.metaPurchases;
+                        const googleOrigin = computedTrafficMetrics.googlePurchases;
+                        const totalOrigin = totalLeads;
+                        const otherOrigin = Math.max(0, totalOrigin - (metaOrigin + googleOrigin));
+
+                        const pieData = [
+                          { name: 'Meta Ads', value: metaOrigin, fill: '#3B82F6' },
+                          { name: 'Google Ads', value: googleOrigin, fill: '#10B981' },
+                          { name: 'Orgânico/Outros', value: otherOrigin, fill: '#9CA3AF' },
+                        ].filter(item => item.value > 0);
+
+                        if (pieData.length === 0) {
+                          return <div className="text-neutral-400">Sem dados suficientes</div>;
+                        }
+
+                        return (
+                          <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                              <Pie
+                                data={pieData}
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={60}
+                                outerRadius={80}
+                                paddingAngle={5}
+                                dataKey="value"
+                              />
+                              <RechartsTooltip
+                                cursor={{ fill: '#F3F4F6' }}
+                                contentStyle={{ borderRadius: '12px', border: '1px solid #E5E7EB', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                formatter={(value: number) => value}
+                                labelStyle={{ color: '#374151', fontWeight: 600, marginBottom: '4px' }}
+                              />
+                              <Legend verticalAlign="bottom" height={36} />
+                            </PieChart>
+                          </ResponsiveContainer>
+                        );
+                      })()}
+                    </div>
+                  </div>
+
+                  {/* Additional Placeholder for CPL / CPA over time*/}
+                  <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm p-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
+                    <div className="mb-6">
+                      <h3 className="text-lg font-semibold text-neutral-800">
+                        Custo por Lead Diário
+                      </h3>
+                      <p className="text-sm text-neutral-500">Evolução do custo de aquisição</p>
+                    </div>
+
+                    <div className="h-[300px] w-full flex items-center justify-center">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <RechartsLineChart data={dailyChartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                          <XAxis
+                            dataKey="dateStr"
+                            axisLine={false}
+                            tickLine={false}
+                            tick={{ fill: '#6B7280', fontSize: 12 }}
+                            dy={10}
+                          />
+                          <YAxis
+                            axisLine={false}
+                            tickLine={false}
+                            tick={{ fill: '#6B7280', fontSize: 12 }}
+                            tickFormatter={(value) => `R$ ${value >= 1000 ? (value / 1000).toFixed(1) + 'k' : value}`}
+                            dx={-10}
+                          />
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                          <RechartsTooltip
+                            cursor={{ stroke: '#9CA3AF', strokeWidth: 1, strokeDasharray: '3 3' }}
+                            contentStyle={{ borderRadius: '12px', border: '1px solid #E5E7EB', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                            formatter={(value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)}
+                            labelStyle={{ color: '#374151', fontWeight: 600, marginBottom: '4px' }}
+                          />
+                          <Legend verticalAlign="bottom" height={36} />
+                          <Line type="monotone" dataKey="totalCost" name="Custo Total" stroke="#F59E0B" strokeWidth={3} dot={{ r: 4, strokeWidth: 2 }} activeDot={{ r: 6 }} />
+                        </RechartsLineChart>
+                      </ResponsiveContainer>
+                    </div>
+
+                  </div>
+                </div>
+              )}
               <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm overflow-hidden">
                 <div className="px-6 py-4 border-b border-neutral-100 bg-neutral-50/50 flex items-center justify-between">
                   <div className="flex items-center gap-2">
