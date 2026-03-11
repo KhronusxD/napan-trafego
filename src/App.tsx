@@ -1631,9 +1631,19 @@ export default function App() {
                 icon: <LayoutDashboard className="w-4 h-4" />,
               },
               {
+                id: "monthly",
+                label: "Visão Mensal",
+                icon: <CalendarDays className="w-4 h-4" />,
+              },
+              {
                 id: "funnel",
                 label: "Funil de Vendas",
                 icon: <Filter className="w-4 h-4" />,
+              },
+              {
+                id: "account-health",
+                label: "Saúde da Conta",
+                icon: <Activity className="w-4 h-4" />,
               },
               {
                 id: "revenue",
@@ -1644,16 +1654,6 @@ export default function App() {
                 id: "strategy",
                 label: "Estratégia",
                 icon: <Lightbulb className="w-4 h-4" />,
-              },
-              {
-                id: "account-health",
-                label: "Saúde da Conta",
-                icon: <Activity className="w-4 h-4" />,
-              },
-              {
-                id: "monthly",
-                label: "Visão Mensal",
-                icon: <CalendarDays className="w-4 h-4" />,
               },
               {
                 id: "simulations",
