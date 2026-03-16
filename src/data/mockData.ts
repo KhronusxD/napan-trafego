@@ -10,6 +10,7 @@ export const companies = [
   { id: "nordeste-graf", name: "Nordeste Graf" },
   { id: "orion-olimpia", name: "Órion Olímpia" },
   { id: "clinvet", name: "Clinvet BSB", type: "whatsapp", spreadsheetId: "1KoDWDJ19pN4hNq7YCWNzkhB1VrabCLGLJvIBfAeS9Nk", sheetTab: "Dashboard" },
+  { id: "itv-manaus", name: "ITV Manaus", type: "itv-manaus", spreadsheetId: "1JRVbCtv4ma2m6UK-0KJ5Xaa0yrPxS2j-09ghZv4huEE", sheetTab: "Lista", trafficTab: "Meta Ads", googleAdsTab: "Google Ads" },
 ];
 
 export const performanceMetrics: Record<string, any> = {

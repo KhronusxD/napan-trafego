@@ -330,8 +330,11 @@ export default function App() {
     const hasGoogleAdsGid = "googleAdsGid" in (currentCompanyObj || {});
 
     const isWhatsapp = (currentCompanyObj as any)?.type === "whatsapp";
+    const isItvManaus = (currentCompanyObj as any)?.type === "itv-manaus";
     const customSpreadsheetId = (currentCompanyObj as any)?.spreadsheetId;
     const customSheetTab = (currentCompanyObj as any)?.sheetTab || tabName;
+    const customTrafficTab = (currentCompanyObj as any)?.trafficTab || tabName;
+    const customGoogleAdsTab = (currentCompanyObj as any)?.googleAdsTab || `${tabName} - Google Ads`;
     const sheetRange = (currentCompanyObj as any)?.sheetRange;
     const rangeParams = sheetRange ? `&range=${sheetRange}` : "";
 
@@ -365,6 +368,15 @@ export default function App() {
                   "Quantidade Pedidos": getVal(["Fechamentos", "Qtd. Fechamentos"])
                 };
               });
+            } else if (isItvManaus) {
+              validData = validData.map((row: any) => {
+                return {
+                  ...row,
+                  "Data": row[""] || row["Data"],
+                  "Pedidos Pagos": row["Faturamento Diário"] || "0",
+                  "Quantidade Pedidos": row["Serviço aprovado"] || "0"
+                };
+              });
             }
 
             setSheetData(validData);
@@ -378,10 +390,9 @@ export default function App() {
       }
     });
 
-    // Fetch Traffic Sheet
     const trafficUrl = hasTrafficGid
       ? `https://docs.google.com/spreadsheets/d/${TRAFFIC_SHEET_ID}/gviz/tq?tqx=out:csv&gid=${(currentCompanyObj as any).trafficGid}${rangeParams}`
-      : `https://docs.google.com/spreadsheets/d/${customSpreadsheetId || TRAFFIC_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(customSheetTab)}${rangeParams}`;
+      : `https://docs.google.com/spreadsheets/d/${customSpreadsheetId || TRAFFIC_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(customTrafficTab)}${rangeParams}`;
 
     Papa.parse(trafficUrl, {
       download: true,
@@ -412,6 +423,23 @@ export default function App() {
                   "Adições no Carrinho": getVal(["Leads Totais", "Leads WhatsApp (Meta + Google)", "Leads WhatsApp"])
                 };
               });
+            } else if (isItvManaus) {
+              validData = validData.map((row: any) => {
+                const getVal = (fields: string[]) => {
+                  for (let f of fields) { if (row[f] !== undefined && row[f] !== "") return row[f]; }
+                  return "0";
+                };
+                return {
+                  ...row,
+                  "Data": row[""] || row["Data"],
+                  "Investimento": getVal(["Investimento"]),
+                  "Faturamento Meta Ads": "0",
+                  "Compras Meta": "0",
+                  "Cliques no Link": getVal(["Cliques"]),
+                  "Visualizações de Página": "0",
+                  "Adições no Carrinho": getVal(["Mensagens"])
+                };
+              });
             }
 
             setTrafficData(validData);
@@ -426,19 +454,18 @@ export default function App() {
     });
 
     // Fetch Google Ads Sheet
-    const googleAdsTabName = `${tabName} - Google Ads`;
     const googleAdsUrl = hasGoogleAdsGid
       ? `https://docs.google.com/spreadsheets/d/${TRAFFIC_SHEET_ID}/gviz/tq?tqx=out:csv&gid=${(currentCompanyObj as any).googleAdsGid}${rangeParams}`
-      : isWhatsapp
-        ? `https://docs.google.com/spreadsheets/d/${customSpreadsheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(customSheetTab)}${rangeParams}`
-        : `https://docs.google.com/spreadsheets/d/${TRAFFIC_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(googleAdsTabName)}${rangeParams}`;
+      : isWhatsapp || isItvManaus
+        ? `https://docs.google.com/spreadsheets/d/${customSpreadsheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(customGoogleAdsTab)}${rangeParams}`
+        : `https://docs.google.com/spreadsheets/d/${TRAFFIC_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(customGoogleAdsTab)}${rangeParams}`;
 
     Papa.parse(googleAdsUrl, {
       download: true,
       header: true,
       complete: (results) => {
         if (results.errors.length > 0 && results.data.length === 0) {
-          setGoogleAdsError(`Erro ao carregar a planilha do Google Ads. Verifique se ela está pública e se existe uma aba com o nome exato: "${googleAdsTabName}".`);
+          setGoogleAdsError(`Erro ao carregar a planilha do Google Ads. Verifique se ela está pública e se existe uma aba com o nome exato: "${customGoogleAdsTab}".`);
         } else {
           if (results.meta.fields && results.meta.fields.length === 1 && results.meta.fields[0].includes("<!DOCTYPE html>")) {
             setGoogleAdsError(`A planilha do Google Ads é privada. Você precisa alterar o acesso para "Qualquer pessoa com o link".`);
@@ -458,6 +485,22 @@ export default function App() {
                   "Valor da conversão": getVal(["Faturamento Google Ads"]),
                   "Conversões": "0",
                   "Cliques": "0",
+                  "Adições ao carrinho": "0"
+                };
+              });
+            } else if (isItvManaus) {
+              validData = validData.map((row: any) => {
+                const getVal = (fields: string[]) => {
+                  for (let f of fields) { if (row[f] !== undefined && row[f] !== "") return row[f]; }
+                  return "0";
+                };
+                return {
+                  ...row,
+                  "Data": row[""] || row["Data"],
+                  "Investimento": getVal(["Investimento"]),
+                  "Valor da conversão": getVal(["Faturamento Google Ads"]),
+                  "Conversões": getVal(["Conversões"]),
+                  "Cliques": getVal(["Cliques no Link"]),
                   "Adições ao carrinho": "0"
                 };
               });
@@ -881,6 +924,12 @@ export default function App() {
     purchases: 0,
     prevRevenue: 0,
     prevPurchases: 0,
+    totalEntrada: 0,
+    servicoAprovado: 0,
+    totalSaidas: 0,
+    prevTotalEntrada: 0,
+    prevServicoAprovado: 0,
+    prevTotalSaidas: 0,
   };
 
   filteredData.forEach(row => {
@@ -891,6 +940,18 @@ export default function App() {
     const purchasesStr = row["Quantidade Pedidos"] || "0";
     const purchasesNum = parseInt(purchasesStr, 10);
     if (!isNaN(purchasesNum)) computedMetrics.purchases += purchasesNum;
+
+    const totalEntradaStr = row["Total de Entrada"] || "0";
+    const totalEntradaNum = parseInt(totalEntradaStr, 10);
+    if (!isNaN(totalEntradaNum)) computedMetrics.totalEntrada += totalEntradaNum;
+
+    const servicoAprovadoStr = row["Quantidade Pedidos"] || "0"; // Mapeado anteriormente
+    const servicoAprovadoNum = parseInt(servicoAprovadoStr, 10);
+    if (!isNaN(servicoAprovadoNum)) computedMetrics.servicoAprovado += servicoAprovadoNum;
+
+    const totalSaidasStr = row["Total de Saídas"] || "0";
+    const totalSaidasNum = parseInt(totalSaidasStr, 10);
+    if (!isNaN(totalSaidasNum)) computedMetrics.totalSaidas += totalSaidasNum;
   });
 
   previousFilteredData.forEach(row => {
@@ -901,6 +962,18 @@ export default function App() {
     const purchasesStr = row["Quantidade Pedidos"] || "0";
     const purchasesNum = parseInt(purchasesStr, 10);
     if (!isNaN(purchasesNum)) computedMetrics.prevPurchases += purchasesNum;
+
+    const totalEntradaStr = row["Total de Entrada"] || "0";
+    const totalEntradaNum = parseInt(totalEntradaStr, 10);
+    if (!isNaN(totalEntradaNum)) computedMetrics.prevTotalEntrada += totalEntradaNum;
+
+    const servicoAprovadoStr = row["Quantidade Pedidos"] || "0";
+    const servicoAprovadoNum = parseInt(servicoAprovadoStr, 10);
+    if (!isNaN(servicoAprovadoNum)) computedMetrics.prevServicoAprovado += servicoAprovadoNum;
+
+    const totalSaidasStr = row["Total de Saídas"] || "0";
+    const totalSaidasNum = parseInt(totalSaidasStr, 10);
+    if (!isNaN(totalSaidasNum)) computedMetrics.prevTotalSaidas += totalSaidasNum;
   });
 
   const formattedRevenue = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(computedMetrics.revenue);
@@ -1167,6 +1240,7 @@ export default function App() {
 
   // Calculate new Metrics (Leads, CAC, CPL/CPA)
   const isWhatsapp = (companies.find(c => c.id === selectedCompany) as any)?.type === "whatsapp";
+  const isItvManaus = (companies.find(c => c.id === selectedCompany) as any)?.type === "itv-manaus";
 
   const totalLeads = useMemo(() => {
     let leads = 0;
@@ -1179,8 +1253,18 @@ export default function App() {
         if (!isNaN(l)) leads += l;
       }
     });
+    if (isItvManaus) {
+      googleAdsData.forEach(row => {
+        const d = parseDate(row["Data"]);
+        if (d && isDateInRange(d)) {
+          const lStr = row["Conversões"] || "0";
+          const l = parseInt(lStr.replace(/\./g, ''), 10);
+          if (!isNaN(l)) leads += l;
+        }
+      });
+    }
     return leads;
-  }, [trafficData, dateRange, customStartDate, customEndDate]);
+  }, [trafficData, googleAdsData, isItvManaus, dateRange, customStartDate, customEndDate]);
 
   const prevTotalLeads = useMemo(() => {
     let leads = 0;
@@ -1192,8 +1276,18 @@ export default function App() {
         if (!isNaN(l)) leads += l;
       }
     });
+    if (isItvManaus) {
+      googleAdsData.forEach(row => {
+        const d = parseDate(row["Data"]);
+        if (d && isDateInPreviousRange(d)) {
+          const lStr = row["Conversões"] || "0";
+          const l = parseInt(lStr.replace(/\./g, ''), 10);
+          if (!isNaN(l)) leads += l;
+        }
+      });
+    }
     return leads;
-  }, [trafficData, dateRange, customStartDate, customEndDate]);
+  }, [trafficData, googleAdsData, isItvManaus, dateRange, customStartDate, customEndDate]);
 
   const totalConversions = isWhatsapp ? computedMetrics.purchases : computedMetrics.purchases;
   const prevTotalConversions = isWhatsapp ? computedMetrics.prevPurchases : computedMetrics.prevPurchases;
@@ -1741,7 +1835,61 @@ export default function App() {
               </div>
 
               {/* Metric Cards */}
-              <div className={`grid grid-cols-1 md:grid-cols-2 ${isWhatsapp ? 'lg:grid-cols-3' : 'lg:grid-cols-4'} gap-4`}>
+              <div className={`grid grid-cols-1 md:grid-cols-2 ${isWhatsapp || isItvManaus ? 'lg:grid-cols-3' : 'lg:grid-cols-4'} gap-4`}>
+                {isItvManaus ? (
+                  <>
+                    <MetricCard
+                      title="Total de Entrada"
+                      value={computedMetrics.totalEntrada.toString()}
+                      currentAmount={computedMetrics.totalEntrada}
+                      previousAmount={computedMetrics.prevTotalEntrada}
+                      isCurrency={false}
+                      icon={<Users className="w-5 h-5 text-blue-600" />}
+                    />
+                    <MetricCard
+                      title="Serviço Aprovado"
+                      value={computedMetrics.servicoAprovado.toString()}
+                      currentAmount={computedMetrics.servicoAprovado}
+                      previousAmount={computedMetrics.prevServicoAprovado}
+                      isCurrency={false}
+                      icon={<CheckCircle2 className="w-5 h-5 text-emerald-600" />}
+                    />
+                    <MetricCard
+                      title="Total de Saídas"
+                      value={computedMetrics.totalSaidas.toString()}
+                      currentAmount={computedMetrics.totalSaidas}
+                      previousAmount={computedMetrics.prevTotalSaidas}
+                      isCurrency={false}
+                      icon={<ShoppingCart className="w-5 h-5 text-orange-600" />}
+                    />
+                    <MetricCard
+                      title="Investimento Total"
+                      value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(computedTrafficMetrics.investimentoTotal)}
+                      currentAmount={computedTrafficMetrics.investimentoTotal}
+                      previousAmount={computedTrafficMetrics.prevInvestimentoTotal}
+                      isCurrency={true}
+                      icon={<TrendingUp className="w-5 h-5 text-indigo-600" />}
+                      inverseChange
+                    />
+                    <MetricCard
+                      title="Leads Totais"
+                      value={totalLeads.toString()}
+                      currentAmount={totalLeads}
+                      previousAmount={prevTotalLeads}
+                      isCurrency={false}
+                      icon={<Users className="w-5 h-5 text-purple-600" />}
+                    />
+                    <MetricCard
+                      title="Faturamento"
+                      value={formattedRevenue}
+                      currentAmount={computedMetrics.revenue}
+                      previousAmount={computedMetrics.prevRevenue}
+                      isCurrency={true}
+                      icon={<DollarSign className="w-5 h-5 text-emerald-600" />}
+                    />
+                  </>
+                ) : (
+                  <>
                 <MetricCard
                   title="Faturamento"
                   value={formattedRevenue}
@@ -1865,6 +2013,8 @@ export default function App() {
                     icon={<Filter className="w-5 h-5 text-teal-600" />}
                     inverseChange
                   />
+                )}
+                  </>
                 )}
               </div>
 
@@ -2265,7 +2415,51 @@ export default function App() {
                     <h3 className="font-semibold text-neutral-800 mb-6">Jornada do Cliente</h3>
 
                     <div className="space-y-4">
-                      {[
+                      {(isItvManaus ? [
+                        {
+                          id: 'cliques',
+                          label: 'Cliques no Link',
+                          desc: 'Topo de Funil',
+                          icon: <MousePointerClick className="w-5 h-5" />,
+                          color: 'blue',
+                          key: 'Cliques no Link'
+                        },
+                        {
+                          id: 'views',
+                          label: 'Visualizações de Página',
+                          desc: 'Topo de Funil',
+                          icon: <Users className="w-5 h-5" />,
+                          color: 'indigo',
+                          key: 'Visualizações de Página'
+                        },
+                        {
+                          id: 'total_entrada',
+                          label: 'Total de Entrada',
+                          desc: 'Meio de Funil',
+                          icon: <ShoppingCart className="w-5 h-5" />,
+                          color: 'amber',
+                          key: 'Total de Entrada',
+                          valueOverwrite: computedMetrics.totalEntrada
+                        },
+                        {
+                          id: 'servico_aprovado',
+                          label: 'Serviço Aprovado',
+                          desc: 'Fundo de Funil',
+                          icon: <CheckCircle2 className="w-5 h-5" />,
+                          color: 'emerald',
+                          key: 'Serviço Aprovado',
+                          valueOverwrite: computedMetrics.servicoAprovado
+                        },
+                        {
+                          id: 'total_consertos',
+                          label: 'Total de Consertos',
+                          desc: 'Fundo de Funil',
+                          icon: <Target className="w-5 h-5" />,
+                          color: 'orange',
+                          key: 'Total de Consertos',
+                          valueOverwrite: computedMetrics.totalSaidas
+                        }
+                      ] : [
                         {
                           id: 'cliques',
                           label: 'Cliques no Link',
@@ -2306,11 +2500,11 @@ export default function App() {
                           color: 'emerald',
                           key: 'Compras Meta'
                         }
-                      ].map((stage, index, array) => {
+                      ]).map((stage: any, index, array) => {
                         const currentFunnelData = funnelDataSources[funnelSource];
-                        const value = currentFunnelData[stage.key] || 0;
+                        const value = stage.valueOverwrite !== undefined ? stage.valueOverwrite : (currentFunnelData[stage.key] || 0);
                         const nextStage = array[index + 1];
-                        const nextValue = nextStage ? (currentFunnelData[nextStage.key] || 0) : null;
+                        const nextValue = nextStage ? (nextStage.valueOverwrite !== undefined ? nextStage.valueOverwrite : (currentFunnelData[nextStage.key] || 0)) : null;
                         const conversionRate = nextValue !== null && value > 0 ? ((nextValue / value) * 100).toFixed(1) : "0.0";
 
                         const colorMap: Record<string, any> = {
