@@ -102,7 +102,7 @@ const VariationBadge = ({ current, previous, inverse = false, neutral = false }:
 };
 
 const AdminPanel = ({ dbCompanies, fetchCompanies }: { dbCompanies: any[], fetchCompanies: () => void }) => {
-  const [adminTab, setAdminTab] = useState<'clients' | 'access'>('clients');
+  const [adminTab, setAdminTab] = useState<'clients' | 'access' | 'templates'>('clients');
 
   // --- Clients ---
   const [isEditingCompany, setIsEditingCompany] = useState(false);
@@ -240,6 +240,43 @@ const AdminPanel = ({ dbCompanies, fetchCompanies }: { dbCompanies: any[], fetch
     }
   };
 
+  // --- Templates ---
+  const [templatesList, setTemplatesList] = useState<any[]>([
+    { id: 'default', name: 'Padrão (E-commerce)', description: 'Template padrão para lojas e-commerce' },
+    { id: 'whatsapp', name: 'WhatsApp / Leads', description: 'Para clientes que usam WhatsApp como canal principal' },
+    { id: 'servicos', name: 'Serviços', description: 'Para negócios de serviços (inspeção, consultoria, etc)' }
+  ]);
+  const [isEditingTemplate, setIsEditingTemplate] = useState(false);
+  const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
+  const [templateFeedback, setTemplateFeedback] = useState<{ type: 'success' | 'error', msg: string } | null>(null);
+  const [templateForm, setTemplateForm] = useState<any>({});
+
+  const showTemplateFeedback = (type: 'success' | 'error', msg: string) => {
+    setTemplateFeedback({ type, msg });
+    setTimeout(() => setTemplateFeedback(null), 4000);
+  };
+
+  const openEditTemplate = (templateId: string) => {
+    setEditingTemplateId(templateId);
+    const template = templatesList.find(t => t.id === templateId);
+    setTemplateForm({ ...template });
+    setIsEditingTemplate(true);
+  };
+
+  const handleSaveTemplate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const payload = { id: templateForm.id, name: templateForm.name, description: templateForm.description, is_active: true, column_mapping: templateForm.column_mapping || {}, updated_at: new Date().toISOString() };
+      const { error } = await supabase.from('client_templates').upsert(payload, { onConflict: 'id' });
+      if (error) throw error;
+      showTemplateFeedback('success', `Template "${templateForm.name}" salvo!`);
+      setIsEditingTemplate(false);
+      setTemplatesList(templatesList.map(t => t.id === templateForm.id ? templateForm : t));
+    } catch (err: any) {
+      showTemplateFeedback('error', 'Erro ao salvar: ' + err.message);
+    }
+  };
+
   const typeLabel = (type: string) => ({ 'whatsapp': 'WhatsApp / Leads', 'itv-manaus': 'ITV Manaus' }[type] || 'Padrão');
   const typeBadgeClass = (type: string) => ({
     'whatsapp': 'bg-green-50 text-green-700',
@@ -264,6 +301,12 @@ const AdminPanel = ({ dbCompanies, fetchCompanies }: { dbCompanies: any[], fetch
           >
             Acessos de Usuário
           </button>
+          <button
+            onClick={() => setAdminTab('templates')}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${adminTab === 'templates' ? 'bg-indigo-600 text-white' : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'}`}
+          >
+            Padrões de Visualização
+          </button>
         </div>
       </div>
 
@@ -276,6 +319,11 @@ const AdminPanel = ({ dbCompanies, fetchCompanies }: { dbCompanies: any[], fetch
       {adminTab === 'access' && accessFeedback && (
         <div className={`p-3 rounded-xl text-sm font-medium border ${accessFeedback.type === 'success' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
           {accessFeedback.msg}
+        </div>
+      )}
+      {adminTab === 'templates' && templateFeedback && (
+        <div className={`p-3 rounded-xl text-sm font-medium border ${templateFeedback.type === 'success' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
+          {templateFeedback.msg}
         </div>
       )}
 
@@ -536,6 +584,73 @@ const AdminPanel = ({ dbCompanies, fetchCompanies }: { dbCompanies: any[], fetch
               </table>
             )}
           </div>
+        </div>
+      )}
+
+      {/* ===== TEMPLATES TAB ===== */}
+      {adminTab === 'templates' && (
+        <div className="space-y-4">
+          <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm overflow-hidden">
+            <div className="px-6 py-4 border-b border-neutral-100 flex items-center justify-between">
+              <span className="text-sm font-medium text-neutral-700">{templatesList.length} padrão{templatesList.length !== 1 ? 's' : ''} cadastrado{templatesList.length !== 1 ? 's' : ''}</span>
+              <span className="text-xs text-neutral-400">Clique em um padrão para editar suas configurações</span>
+            </div>
+            <table className="w-full text-left text-sm">
+              <thead className="bg-neutral-50 text-neutral-500 border-b border-neutral-100">
+                <tr>
+                  <th className="px-6 py-3 font-medium">ID / Nome</th>
+                  <th className="px-6 py-3 font-medium">Descrição</th>
+                  <th className="px-6 py-3 font-medium text-right">Ações</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-neutral-100">
+                {templatesList.map((template: any) => (
+                  <tr key={template.id} className="hover:bg-neutral-50">
+                    <td className="px-6 py-4">
+                      <div className="font-medium text-neutral-900">{template.name}</div>
+                      <div className="font-mono text-xs text-neutral-400 mt-0.5">{template.id}</div>
+                    </td>
+                    <td className="px-6 py-4 text-neutral-600 text-sm">{template.description}</td>
+                    <td className="px-6 py-4 text-right">
+                      <button onClick={() => openEditTemplate(template.id)} className="text-indigo-600 hover:text-indigo-800 text-sm font-medium">
+                        Editar
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {isEditingTemplate && editingTemplateId && (
+            <div className="bg-white p-6 rounded-2xl border border-neutral-200 shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-base font-semibold">Editar: {templateForm.name}</h3>
+                <button onClick={() => setIsEditingTemplate(false)} className="text-neutral-400 hover:text-neutral-700 transition-colors">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <form onSubmit={handleSaveTemplate} className="space-y-4">
+                <p className="text-sm text-neutral-600 mb-4">As configurações de mapeamento de colunas foram salvas no Supabase. Edite a coluna <code className="bg-neutral-100 px-2 py-1 rounded text-xs font-mono">column_mapping</code> na tabela <code className="bg-neutral-100 px-2 py-1 rounded text-xs font-mono">client_templates</code> para personalizar.</p>
+                <div>
+                  <label className="block text-sm font-medium text-neutral-700 mb-1">Nome do Padrão</label>
+                  <input value={templateForm.name || ''} onChange={e => setTemplateForm({...templateForm, name: e.target.value})} className="w-full border border-neutral-200 rounded-lg px-3 py-2 text-sm" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-neutral-700 mb-1">Descrição</label>
+                  <textarea value={templateForm.description || ''} onChange={e => setTemplateForm({...templateForm, description: e.target.value})} rows={2} className="w-full border border-neutral-200 rounded-lg px-3 py-2 text-sm" />
+                </div>
+                <div className="flex gap-2 justify-end pt-2 border-t border-neutral-100">
+                  <button type="button" onClick={() => setIsEditingTemplate(false)} className="px-4 py-2 text-sm text-neutral-600 hover:bg-neutral-100 rounded-lg transition-colors">
+                    Cancelar
+                  </button>
+                  <button type="submit" className="flex items-center gap-2 px-4 py-2 text-sm bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors">
+                    <Save className="w-3.5 h-3.5" /> Salvar Padrão
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
         </div>
       )}
     </div>
