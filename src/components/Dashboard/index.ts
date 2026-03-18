@@ -1,0 +1,1 @@
+export { VariationBadge } from './VariationBadge';
