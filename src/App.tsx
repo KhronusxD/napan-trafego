@@ -102,7 +102,7 @@ const VariationBadge = ({ current, previous, inverse = false, neutral = false }:
 };
 
 const AdminPanel = ({ dbCompanies, fetchCompanies }: { dbCompanies: any[], fetchCompanies: () => void }) => {
-  const [adminTab, setAdminTab] = useState<'clients' | 'access'>('clients');
+  const [adminTab, setAdminTab] = useState<'clients' | 'access' | 'templates'>('clients');
 
   // --- Clients ---
   const [isEditingCompany, setIsEditingCompany] = useState(false);
@@ -240,6 +240,43 @@ const AdminPanel = ({ dbCompanies, fetchCompanies }: { dbCompanies: any[], fetch
     }
   };
 
+  // --- Templates ---
+  const [templatesList, setTemplatesList] = useState<any[]>([
+    { id: 'default', name: 'Padrão (E-commerce)', description: 'Template padrão para lojas e-commerce' },
+    { id: 'whatsapp', name: 'WhatsApp / Leads', description: 'Para clientes que usam WhatsApp como canal principal' },
+    { id: 'servicos', name: 'Serviços', description: 'Para negócios de serviços (inspeção, consultoria, etc)' }
+  ]);
+  const [isEditingTemplate, setIsEditingTemplate] = useState(false);
+  const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
+  const [templateFeedback, setTemplateFeedback] = useState<{ type: 'success' | 'error', msg: string } | null>(null);
+  const [templateForm, setTemplateForm] = useState<any>({});
+
+  const showTemplateFeedback = (type: 'success' | 'error', msg: string) => {
+    setTemplateFeedback({ type, msg });
+    setTimeout(() => setTemplateFeedback(null), 4000);
+  };
+
+  const openEditTemplate = (templateId: string) => {
+    setEditingTemplateId(templateId);
+    const template = templatesList.find(t => t.id === templateId);
+    setTemplateForm({ ...template });
+    setIsEditingTemplate(true);
+  };
+
+  const handleSaveTemplate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const payload = { id: templateForm.id, name: templateForm.name, description: templateForm.description, is_active: true, column_mapping: templateForm.column_mapping || {}, updated_at: new Date().toISOString() };
+      const { error } = await supabase.from('client_templates').upsert(payload, { onConflict: 'id' });
+      if (error) throw error;
+      showTemplateFeedback('success', `Template "${templateForm.name}" salvo!`);
+      setIsEditingTemplate(false);
+      setTemplatesList(templatesList.map(t => t.id === templateForm.id ? templateForm : t));
+    } catch (err: any) {
+      showTemplateFeedback('error', 'Erro ao salvar: ' + err.message);
+    }
+  };
+
   const typeLabel = (type: string) => ({ 'whatsapp': 'WhatsApp / Leads', 'itv-manaus': 'ITV Manaus' }[type] || 'Padrão');
   const typeBadgeClass = (type: string) => ({
     'whatsapp': 'bg-green-50 text-green-700',
@@ -264,6 +301,12 @@ const AdminPanel = ({ dbCompanies, fetchCompanies }: { dbCompanies: any[], fetch
           >
             Acessos de Usuário
           </button>
+          <button
+            onClick={() => setAdminTab('templates')}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${adminTab === 'templates' ? 'bg-indigo-600 text-white' : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'}`}
+          >
+            Padrões de Visualização
+          </button>
         </div>
       </div>
 
@@ -276,6 +319,11 @@ const AdminPanel = ({ dbCompanies, fetchCompanies }: { dbCompanies: any[], fetch
       {adminTab === 'access' && accessFeedback && (
         <div className={`p-3 rounded-xl text-sm font-medium border ${accessFeedback.type === 'success' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
           {accessFeedback.msg}
+        </div>
+      )}
+      {adminTab === 'templates' && templateFeedback && (
+        <div className={`p-3 rounded-xl text-sm font-medium border ${templateFeedback.type === 'success' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
+          {templateFeedback.msg}
         </div>
       )}
 
@@ -538,6 +586,73 @@ const AdminPanel = ({ dbCompanies, fetchCompanies }: { dbCompanies: any[], fetch
           </div>
         </div>
       )}
+
+      {/* ===== TEMPLATES TAB ===== */}
+      {adminTab === 'templates' && (
+        <div className="space-y-4">
+          <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm overflow-hidden">
+            <div className="px-6 py-4 border-b border-neutral-100 flex items-center justify-between">
+              <span className="text-sm font-medium text-neutral-700">{templatesList.length} padrão{templatesList.length !== 1 ? 's' : ''} cadastrado{templatesList.length !== 1 ? 's' : ''}</span>
+              <span className="text-xs text-neutral-400">Clique em um padrão para editar suas configurações</span>
+            </div>
+            <table className="w-full text-left text-sm">
+              <thead className="bg-neutral-50 text-neutral-500 border-b border-neutral-100">
+                <tr>
+                  <th className="px-6 py-3 font-medium">ID / Nome</th>
+                  <th className="px-6 py-3 font-medium">Descrição</th>
+                  <th className="px-6 py-3 font-medium text-right">Ações</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-neutral-100">
+                {templatesList.map((template: any) => (
+                  <tr key={template.id} className="hover:bg-neutral-50">
+                    <td className="px-6 py-4">
+                      <div className="font-medium text-neutral-900">{template.name}</div>
+                      <div className="font-mono text-xs text-neutral-400 mt-0.5">{template.id}</div>
+                    </td>
+                    <td className="px-6 py-4 text-neutral-600 text-sm">{template.description}</td>
+                    <td className="px-6 py-4 text-right">
+                      <button onClick={() => openEditTemplate(template.id)} className="text-indigo-600 hover:text-indigo-800 text-sm font-medium">
+                        Editar
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {isEditingTemplate && editingTemplateId && (
+            <div className="bg-white p-6 rounded-2xl border border-neutral-200 shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-base font-semibold">Editar: {templateForm.name}</h3>
+                <button onClick={() => setIsEditingTemplate(false)} className="text-neutral-400 hover:text-neutral-700 transition-colors">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <form onSubmit={handleSaveTemplate} className="space-y-4">
+                <p className="text-sm text-neutral-600 mb-4">As configurações de mapeamento de colunas foram salvas no Supabase. Edite a coluna <code className="bg-neutral-100 px-2 py-1 rounded text-xs font-mono">column_mapping</code> na tabela <code className="bg-neutral-100 px-2 py-1 rounded text-xs font-mono">client_templates</code> para personalizar.</p>
+                <div>
+                  <label className="block text-sm font-medium text-neutral-700 mb-1">Nome do Padrão</label>
+                  <input value={templateForm.name || ''} onChange={e => setTemplateForm({...templateForm, name: e.target.value})} className="w-full border border-neutral-200 rounded-lg px-3 py-2 text-sm" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-neutral-700 mb-1">Descrição</label>
+                  <textarea value={templateForm.description || ''} onChange={e => setTemplateForm({...templateForm, description: e.target.value})} rows={2} className="w-full border border-neutral-200 rounded-lg px-3 py-2 text-sm" />
+                </div>
+                <div className="flex gap-2 justify-end pt-2 border-t border-neutral-100">
+                  <button type="button" onClick={() => setIsEditingTemplate(false)} className="px-4 py-2 text-sm text-neutral-600 hover:bg-neutral-100 rounded-lg transition-colors">
+                    Cancelar
+                  </button>
+                  <button type="submit" className="flex items-center gap-2 px-4 py-2 text-sm bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors">
+                    <Save className="w-3.5 h-3.5" /> Salvar Padrão
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };
@@ -651,6 +766,30 @@ export default function App() {
 
   const SHEET_ID = "1kGjFoEJ36-g1empy9HmYzQmF0Rd-y_06sy54YvOYlps";
   const TRAFFIC_SHEET_ID = "1om3vD7mik6psxaLjt6QGqnkEnGdpr6T5dBrNIjYa4BY";
+
+  // Template system - built-in templates for quick access
+  const builtInTemplates: Record<string, any> = {
+    default: { revenue: { date: ["Data", ""], payment: ["Pedidos Pagos", "Faturamento"], quantity: ["Quantidade Pedidos"] }, traffic: { date: ["Data", ""], investment: ["Investimento"], revenue: ["Faturamento Meta Ads"], purchases: ["Compras Meta"], clicks: ["Cliques no Link"], pageViews: ["Visualizações de Página"], cartAdditions: ["Adições no Carrinho"] }, googleAds: { date: ["Data", ""], investment: ["Investimento"], revenue: ["Valor da conversão"], conversions: ["Conversões"], clicks: ["Cliques"], cartAdditions: ["Adições ao carrinho"] } },
+    whatsapp: { revenue: { date: ["Data", ""], payment: ["Faturamento", "$ Total Tráfego", "$ Total WhatsApp"], quantity: ["Fechamentos", "Qtd. Fechamentos"] }, traffic: { date: ["Data", ""], investment: ["Investimento Meta Ads", "Invest. Meta Ads", "Invest. Meta"], revenue: ["Faturamento Meta Ads", "$ Total WhatsApp"], purchases: [], clicks: [], pageViews: [], cartAdditions: ["Leads Totais", "Leads WhatsApp (Meta + Google)", "Leads WhatsApp"] }, googleAds: { date: ["Data", ""], investment: ["Investimento Google Ads", "Invest. Google Ads", "Invest. Google"], revenue: ["Faturamento Google Ads"], conversions: [], clicks: [], cartAdditions: [] } },
+    servicos: { revenue: { date: ["Data", ""], payment: ["Faturamento Diário"], quantity: ["Serviço aprovado"] }, traffic: { date: ["Data", ""], investment: ["Investimento"], revenue: [], purchases: [], clicks: ["Cliques"], pageViews: [], cartAdditions: ["Mensagens"] }, googleAds: { date: ["Data", ""], investment: ["Investimento"], revenue: ["Faturamento Google Ads"], conversions: ["Conversões"], clicks: ["Cliques no Link"], cartAdditions: [] } }
+  };
+
+  const getClientTemplate = (templateId: string | undefined) => {
+    return builtInTemplates[templateId || 'default'] || builtInTemplates.default;
+  };
+
+  const mapRowsUsingTemplate = (rows: any[], template: any, dataType: 'revenue' | 'traffic' | 'googleAds') => {
+    const cfg = template[dataType];
+    if (!cfg) return rows;
+    return rows.map((row: any) => {
+      const getVal = (fields: string[]) => { for (let f of fields) { if (row[f] !== undefined && row[f] !== "") return row[f]; } return "0"; };
+      const mapped: any = { ...row };
+      if (dataType === 'revenue') { mapped["Data"] = getVal(cfg.date); mapped["Pedidos Pagos"] = getVal(cfg.payment); mapped["Quantidade Pedidos"] = getVal(cfg.quantity); }
+      else if (dataType === 'traffic') { mapped["Data"] = getVal(cfg.date); mapped["Investimento"] = getVal(cfg.investment); mapped["Faturamento Meta Ads"] = getVal(cfg.revenue); mapped["Compras Meta"] = cfg.purchases?.length ? getVal(cfg.purchases) : "0"; mapped["Cliques no Link"] = cfg.clicks?.length ? getVal(cfg.clicks) : "0"; mapped["Visualizações de Página"] = cfg.pageViews?.length ? getVal(cfg.pageViews) : "0"; mapped["Adições no Carrinho"] = getVal(cfg.cartAdditions); }
+      else if (dataType === 'googleAds') { mapped["Data"] = getVal(cfg.date); mapped["Investimento"] = getVal(cfg.investment); mapped["Valor da conversão"] = getVal(cfg.revenue); mapped["Conversões"] = cfg.conversions?.length ? getVal(cfg.conversions) : "0"; mapped["Cliques"] = cfg.clicks?.length ? getVal(cfg.clicks) : "0"; mapped["Adições ao carrinho"] = cfg.cartAdditions?.length ? getVal(cfg.cartAdditions) : "0"; }
+      return mapped;
+    });
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -802,9 +941,7 @@ export default function App() {
     const hasSheetGid = !!(currentCompanyObj?.sheetGid);
     const hasTrafficGid = !!(currentCompanyObj?.trafficGid);
     const hasGoogleAdsGid = !!(currentCompanyObj?.googleAdsGid);
-
-    const isWhatsapp = (currentCompanyObj as any)?.type === "whatsapp";
-    const isItvManaus = (currentCompanyObj as any)?.type === "itv-manaus";
+    const clientTemplate = getClientTemplate((currentCompanyObj as any)?.templateId || (currentCompanyObj as any)?.type);
     const customSpreadsheetId = (currentCompanyObj as any)?.spreadsheetId;
     const customSheetTab = (currentCompanyObj as any)?.sheetTab || tabName;
     const customTrafficTab = (currentCompanyObj as any)?.trafficTab || tabName;
@@ -828,31 +965,7 @@ export default function App() {
             setSheetError(`A planilha é privada. Você precisa alterar o acesso para "Qualquer pessoa com o link" no Google Sheets.`);
           } else {
             let validData = results.data.filter((row: any) => Object.values(row).some(val => val !== ""));
-
-            if (isWhatsapp) {
-              validData = validData.map((row: any) => {
-                const getVal = (fields: string[]) => {
-                  for (let f of fields) { if (row[f] !== undefined && row[f] !== "") return row[f]; }
-                  return "0";
-                };
-                return {
-                  ...row,
-                  "Data": row[""] || row["Data"],
-                  "Pedidos Pagos": getVal(["Faturamento", "$ Total Tráfego", "$ Total WhatsApp"]),
-                  "Quantidade Pedidos": getVal(["Fechamentos", "Qtd. Fechamentos"])
-                };
-              });
-            } else if (isItvManaus) {
-              validData = validData.map((row: any) => {
-                return {
-                  ...row,
-                  "Data": row[""] || row["Data"],
-                  "Pedidos Pagos": row["Faturamento Diário"] || "0",
-                  "Quantidade Pedidos": row["Serviço aprovado"] || "0"
-                };
-              });
-            }
-
+            validData = mapRowsUsingTemplate(validData, clientTemplate, 'revenue');
             setSheetData(validData);
           }
         }
@@ -879,43 +992,7 @@ export default function App() {
             setTrafficError(`A planilha de tráfego é privada. Você precisa alterar o acesso para "Qualquer pessoa com o link".`);
           } else {
             let validData = results.data.filter((row: any) => Object.values(row).some(val => val !== ""));
-
-            if (isWhatsapp) {
-              validData = validData.map((row: any) => {
-                const getVal = (fields: string[]) => {
-                  for (let f of fields) { if (row[f] !== undefined && row[f] !== "") return row[f]; }
-                  return "0";
-                };
-                return {
-                  ...row,
-                  "Data": row[""] || row["Data"],
-                  "Investimento": getVal(["Investimento Meta Ads", "Invest. Meta Ads", "Invest. Meta"]),
-                  "Faturamento Meta Ads": getVal(["Faturamento Meta Ads", "$ Total WhatsApp"]),
-                  "Compras Meta": "0",
-                  "Cliques no Link": "0",
-                  "Visualizações de Página": "0",
-                  "Adições no Carrinho": getVal(["Leads Totais", "Leads WhatsApp (Meta + Google)", "Leads WhatsApp"])
-                };
-              });
-            } else if (isItvManaus) {
-              validData = validData.map((row: any) => {
-                const getVal = (fields: string[]) => {
-                  for (let f of fields) { if (row[f] !== undefined && row[f] !== "") return row[f]; }
-                  return "0";
-                };
-                return {
-                  ...row,
-                  "Data": row[""] || row["Data"],
-                  "Investimento": getVal(["Investimento"]),
-                  "Faturamento Meta Ads": "0",
-                  "Compras Meta": "0",
-                  "Cliques no Link": getVal(["Cliques"]),
-                  "Visualizações de Página": "0",
-                  "Adições no Carrinho": getVal(["Mensagens"])
-                };
-              });
-            }
-
+            validData = mapRowsUsingTemplate(validData, clientTemplate, 'traffic');
             setTrafficData(validData);
           }
         }
@@ -928,9 +1005,10 @@ export default function App() {
     });
 
     // Fetch Google Ads Sheet
+    const usesCustomSpreadsheet = ['whatsapp', 'servicos'].includes((currentCompanyObj as any)?.templateId || (currentCompanyObj as any)?.type);
     const googleAdsUrl = hasGoogleAdsGid
       ? `https://docs.google.com/spreadsheets/d/${TRAFFIC_SHEET_ID}/gviz/tq?tqx=out:csv&gid=${(currentCompanyObj as any).googleAdsGid}${rangeParams}`
-      : isWhatsapp || isItvManaus
+      : usesCustomSpreadsheet
         ? `https://docs.google.com/spreadsheets/d/${customSpreadsheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(customGoogleAdsTab)}${rangeParams}`
         : `https://docs.google.com/spreadsheets/d/${TRAFFIC_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(customGoogleAdsTab)}${rangeParams}`;
 
@@ -945,41 +1023,7 @@ export default function App() {
             setGoogleAdsError(`A planilha do Google Ads é privada. Você precisa alterar o acesso para "Qualquer pessoa com o link".`);
           } else {
             let validData = results.data.filter((row: any) => Object.values(row).some(val => val !== ""));
-
-            if (isWhatsapp) {
-              validData = validData.map((row: any) => {
-                const getVal = (fields: string[]) => {
-                  for (let f of fields) { if (row[f] !== undefined && row[f] !== "") return row[f]; }
-                  return "0";
-                };
-                return {
-                  ...row,
-                  "Data": row[""] || row["Data"],
-                  "Investimento": getVal(["Investimento Google Ads", "Invest. Google Ads", "Invest. Google"]),
-                  "Valor da conversão": getVal(["Faturamento Google Ads"]),
-                  "Conversões": "0",
-                  "Cliques": "0",
-                  "Adições ao carrinho": "0"
-                };
-              });
-            } else if (isItvManaus) {
-              validData = validData.map((row: any) => {
-                const getVal = (fields: string[]) => {
-                  for (let f of fields) { if (row[f] !== undefined && row[f] !== "") return row[f]; }
-                  return "0";
-                };
-                return {
-                  ...row,
-                  "Data": row[""] || row["Data"],
-                  "Investimento": getVal(["Investimento"]),
-                  "Valor da conversão": getVal(["Faturamento Google Ads"]),
-                  "Conversões": getVal(["Conversões"]),
-                  "Cliques": getVal(["Cliques no Link"]),
-                  "Adições ao carrinho": "0"
-                };
-              });
-            }
-
+            validData = mapRowsUsingTemplate(validData, clientTemplate, 'googleAds');
             setGoogleAdsData(validData);
           }
         }
