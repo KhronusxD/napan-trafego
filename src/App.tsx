@@ -216,6 +216,7 @@ export default function App() {
         trafficGid: c.traffic_gid,
         googleAdsGid: c.google_ads_gid,
         spreadsheetId: c.spreadsheet_id,
+        ordersSpreadsheetId: c.orders_spreadsheet_id,
         sheetTab: c.sheet_tab,
         trafficTab: c.traffic_tab,
         googleAdsTab: c.google_ads_tab
